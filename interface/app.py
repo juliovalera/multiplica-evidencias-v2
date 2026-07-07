@@ -613,12 +613,16 @@ class MultiplicaApp(tk.Tk):
             text=f"Versão atual: {APP_VERSION}",
             justify="left",
         ).pack(anchor="w", pady=(0, 8))
-        ttk.Label(
+        tk.Label(
             self.home_tab,
             text=(
-                "Uso descritivo do nome Programa Multiplica, sem caráter oficial "
-                "ou vínculo institucional automático."
+                "AVISO IMPORTANTE: ESTE PROJETO É INDEPENDENTE E NÃO OFICIAL.\n"
+                "A menção ao Programa Multiplica é apenas descritiva e não representa\n"
+                "homologação, licenciamento de marca ou vínculo institucional automático."
             ),
+            font=("Segoe UI", 10, "bold"),
+            fg="#8b1e1e",
+            bg=self.home_tab.cget("background"),
             justify="left",
         ).pack(anchor="w", pady=(0, 8))
         ttk.Label(
@@ -1962,6 +1966,18 @@ class MultiplicaApp(tk.Tk):
             text=self._get_terms_acceptance_summary(),
             font=("Segoe UI", 9),
         ).pack(anchor="w", pady=(0, 10))
+        tk.Label(
+            container,
+            text=(
+                "AVISO IMPORTANTE: PROJETO INDEPENDENTE E NÃO OFICIAL.\n"
+                "Uso descritivo do nome Programa Multiplica, sem homologação\n"
+                "ou vínculo institucional automático."
+            ),
+            font=("Segoe UI", 10, "bold"),
+            fg="#8b1e1e",
+            bg=container.cget("background"),
+            justify="left",
+        ).pack(anchor="w", pady=(0, 10))
 
         text_frame = ttk.Frame(container)
         text_frame.pack(fill="both", expand=True)
@@ -2044,6 +2060,17 @@ class MultiplicaApp(tk.Tk):
             text="Leia com atenção antes de utilizar o sistema.",
             font=("Segoe UI", 10),
         ).pack(anchor="w", pady=(6, 12))
+        tk.Label(
+            container,
+            text=(
+                "AVISO IMPORTANTE: ESTE SOFTWARE É INDEPENDENTE E NÃO OFICIAL.\n"
+                "A referência ao Programa Multiplica tem caráter apenas descritivo."
+            ),
+            font=("Segoe UI", 10, "bold"),
+            fg="#8b1e1e",
+            bg=container.cget("background"),
+            justify="left",
+        ).pack(anchor="w", pady=(0, 12))
 
         text_frame = ttk.Frame(container)
         text_frame.pack(fill="both", expand=True)

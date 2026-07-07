@@ -164,6 +164,13 @@ def _add_main_title(document: Any, title_text: str, month_data: Dict[str, object
         f"Referência: {int(month_data['ref_month']):02d}/{int(month_data['ref_year'])}"
     )
 
+    disclaimer = document.add_paragraph(style="CabecalhoRelatorio")
+    disclaimer.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    disclaimer_run = disclaimer.add_run(
+        "Ferramenta independente de apoio. Documento não oficial."
+    )
+    disclaimer_run.bold = True
+
 
 def _add_evidence_header_table(
     document: Any, month_data: Dict[str, object], turmas: List[str]

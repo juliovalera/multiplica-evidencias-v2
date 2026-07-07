@@ -23,6 +23,10 @@
 
 <p><em>Ferramenta independente de apoio ao professor multiplicador, com foco em organização, evidências e documentação mensal.</em></p>
 
+> **AVISO IMPORTANTE:** **este projeto é INDEPENDENTE e NÃO OFICIAL.**  
+> **Não representa sistema oficial, homologação institucional, licenciamento de marca ou vínculo institucional automático.**  
+> **A menção ao Programa Multiplica é apenas descritiva, para indicar o contexto de uso da ferramenta.**
+
 </div>
 
 ---
@@ -31,7 +35,7 @@
 
 O projeto foi criado para reduzir retrabalho no registro mensal de encontros do professor multiplicador. A aplicação centraliza professor, turmas, encontros, evidências, checklist e geração de arquivos em um fluxo local, simples e sem dependência de internet.
 
-> **Importante:** este projeto é uma ferramenta **independente e não oficial**, desenvolvida para uso de apoio no contexto do Programa Multiplica. O nome do programa é utilizado apenas de forma descritiva, para indicar o ambiente de aplicação da ferramenta.
+> **Importante:** este projeto é uma ferramenta **independente e não oficial**, desenvolvida para uso de apoio no contexto do Programa Multiplica. **O nome do programa é utilizado apenas de forma descritiva**, para indicar o ambiente de aplicação da ferramenta.
 
 ## Principais recursos
 
