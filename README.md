@@ -1,9 +1,12 @@
+<div align="center">
+
 # Multiplica Evidências
 
 Aplicação desktop em Python para registrar encontros do Programa Multiplica, armazenar evidências localmente e gerar documentos mensais de apoio pedagógico e administrativo.
 
-> **Versão atual:** `1,023`  
-> **Primeira publicação pública no GitHub:** `1.000`
+**Versão atual:** `1,023` • **Primeira publicação pública:** `1.000` • **Licença:** `MIT`
+
+</div>
 
 ---
 
@@ -228,3 +231,9 @@ Professor de Matemática, Programação e Robótica
 - `juliovalera@professor.educacao.sp.gov.br`
 
 Sugestões, críticas construtivas e observações de melhoria são bem-vindas.
+
+---
+
+## Licença
+
+Este projeto está licenciado sob a licença `MIT`.
