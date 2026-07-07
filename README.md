@@ -1,10 +1,27 @@
 <div align="center">
 
-# Multiplica Evidências
+<h1>📘 Multiplica Evidências</h1>
 
-Aplicação desktop em Python para registrar encontros do Programa Multiplica, armazenar evidências localmente e gerar documentos mensais de apoio pedagógico e administrativo.
+<p>
+  Aplicação desktop em Python para registrar encontros do <strong>Programa Multiplica</strong>,
+  organizar evidências localmente e gerar documentos mensais de apoio pedagógico e administrativo.
+</p>
 
-**Versão atual:** `1,023` • **Primeira publicação pública:** `1.000` • **Licença:** `MIT`
+<p>
+  <img alt="Python" src="https://img.shields.io/badge/Python-3.11%2B-3776AB?style=for-the-badge&logo=python&logoColor=white">
+  <img alt="Tkinter" src="https://img.shields.io/badge/Interface-Tkinter-1F6FEB?style=for-the-badge">
+  <img alt="SQLite" src="https://img.shields.io/badge/Banco-SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white">
+  <img alt="DOCX/PDF" src="https://img.shields.io/badge/Relat%C3%B3rios-DOCX%20%2F%20PDF-8A2BE2?style=for-the-badge">
+  <img alt="Licença MIT" src="https://img.shields.io/badge/Licen%C3%A7a-MIT-E0A800?style=for-the-badge">
+  <img alt="Versão 1,023" src="https://img.shields.io/badge/Vers%C3%A3o-1.023-7B1FA2?style=for-the-badge">
+</p>
+
+<p>
+  <strong>Versão atual:</strong> <code>1,023</code> &nbsp;•&nbsp;
+  <strong>Primeira publicação pública:</strong> <code>1.000</code>
+</p>
+
+<p><em>Ferramenta local para professor multiplicador, com foco em organização, evidências e documentação mensal.</em></p>
 
 </div>
 
