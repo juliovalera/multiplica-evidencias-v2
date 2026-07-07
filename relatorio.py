@@ -259,7 +259,11 @@ def generate_docx(
     _ensure_body_style(document)
     _set_section_layout(document)
     _add_page_number_footer(document)
-    _add_main_title(document, "Relatório Mensal de Evidências - Programa Multiplica", month_data)
+    _add_main_title(
+        document,
+        "Relatório Mensal de Evidências - Ferramenta de Apoio ao Professor Multiplicador",
+        month_data,
+    )
     document.add_paragraph()
     _add_evidence_header_table(document, month_data, turmas)
     document.add_paragraph()
@@ -359,7 +363,11 @@ def generate_financial_statement_docx(
     _ensure_body_style(document)
     _set_section_layout(document)
     _add_page_number_footer(document)
-    _add_main_title(document, "Extrato Financeiro Mensal - Programa Multiplica", month_data)
+    _add_main_title(
+        document,
+        "Extrato Financeiro Mensal - Ferramenta de Apoio ao Professor Multiplicador",
+        month_data,
+    )
     document.add_paragraph()
     _add_financial_header_table(document, month_data)
     document.add_paragraph()

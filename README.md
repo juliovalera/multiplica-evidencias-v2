@@ -3,8 +3,8 @@
 <h1>📘 Multiplica Evidências</h1>
 
 <p>
-  Aplicação desktop em Python para registrar encontros do <strong>Programa Multiplica</strong>,
-  organizar evidências localmente e gerar documentos mensais de apoio pedagógico e administrativo.
+  Aplicação desktop em Python para apoiar o professor multiplicador na organização local de encontros,
+  evidências e documentos mensais relacionados ao <strong>Programa Multiplica</strong>.
 </p>
 
 <p>
@@ -21,7 +21,7 @@
   <strong>Primeira publicação pública:</strong> <code>1.000</code>
 </p>
 
-<p><em>Ferramenta local para professor multiplicador, com foco em organização, evidências e documentação mensal.</em></p>
+<p><em>Ferramenta independente de apoio ao professor multiplicador, com foco em organização, evidências e documentação mensal.</em></p>
 
 </div>
 
@@ -30,6 +30,8 @@
 ## Visão geral
 
 O projeto foi criado para reduzir retrabalho no registro mensal de encontros do professor multiplicador. A aplicação centraliza professor, turmas, encontros, evidências, checklist e geração de arquivos em um fluxo local, simples e sem dependência de internet.
+
+> **Importante:** este projeto é uma ferramenta **independente e não oficial**, desenvolvida para uso de apoio no contexto do Programa Multiplica. O nome do programa é utilizado apenas de forma descritiva, para indicar o ambiente de aplicação da ferramenta.
 
 ## Principais recursos
 
