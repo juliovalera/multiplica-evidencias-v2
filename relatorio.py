@@ -4,8 +4,8 @@ from datetime import datetime
 from pathlib import Path
 import shutil
 import subprocess
-from typing import Any
-from typing import Dict, List, Optional
+import tempfile
+from typing import Any, Dict, List, Optional
 
 try:
     from docx import Document
@@ -15,6 +15,7 @@ try:
     from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
     from docx.shared import Cm, Pt
+
     DOCX_IMPORT_ERROR = None
 except ImportError as error:
     Document = None
@@ -28,6 +29,9 @@ except ImportError as error:
     DOCX_IMPORT_ERROR = error
 
 from config import MODEL_DOCX_PATH, SAIDAS_DIR, slugify
+
+
+PAYABLE_STATUSES = {"realizado", "sem cursistas"}
 
 
 def _ensure_docx_available() -> None:
@@ -106,8 +110,7 @@ def _add_page_number_footer(document: Any) -> None:
 
 
 def _set_borderless(table) -> None:
-    tbl = table._tbl
-    tbl_pr = tbl.tblPr
+    tbl_pr = table._tbl.tblPr
     borders = tbl_pr.first_child_found_in("w:tblBorders")
     if borders is None:
         borders = OxmlElement("w:tblBorders")
@@ -124,26 +127,47 @@ def _format_date_br(iso_date: str) -> str:
     return datetime.strptime(iso_date, "%Y-%m-%d").strftime("%d/%m")
 
 
-def _sanitize_filename(month_data: Dict[str, object]) -> str:
-    teacher = slugify(str(month_data.get("teacher_name", "")))
+def _format_currency_br(cents: int) -> str:
+    value = max(int(cents or 0), 0) / 100
+    formatted = f"{value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    return f"R$ {formatted}"
+
+
+def _teacher_initials(month_data: Dict[str, object]) -> str:
+    raw_name = str(month_data.get("teacher_name", "") or "").strip()
+    parts = [part for part in raw_name.replace("-", " ").split() if part]
+    initials = "".join(part[0].upper() for part in parts[:6])
+    return slugify(initials) or "PROF"
+
+
+def _sanitize_filename(month_data: Dict[str, object], prefix: str) -> str:
     month = int(month_data["ref_month"])
     year = int(month_data["ref_year"])
-    return f"evidencias_{year}_{month:02d}_{teacher or 'professor'}"
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    initials = _teacher_initials(month_data)
+    return f"{prefix}_{year}_{month:02d}_{initials}_{timestamp}"
 
 
-def _add_report_title(document: Any, month_data: Dict[str, object]) -> None:
-    paragraph = document.add_paragraph(style="CabecalhoRelatorio")
-    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    paragraph.add_run("Relatorio Mensal de Evidencias - Programa Multiplica")
+def _create_document(model_path: Optional[Path] = MODEL_DOCX_PATH) -> Any:
+    _ensure_docx_available()
+    return Document()
+
+
+def _add_main_title(document: Any, title_text: str, month_data: Dict[str, object]) -> None:
+    title = document.add_paragraph(style="CabecalhoRelatorio")
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    title.add_run(title_text)
 
     reference = document.add_paragraph()
     reference.alignment = WD_ALIGN_PARAGRAPH.CENTER
     reference.add_run(
-        f"Referencia: {int(month_data['ref_month']):02d}/{int(month_data['ref_year'])}"
+        f"Referência: {int(month_data['ref_month']):02d}/{int(month_data['ref_year'])}"
     )
 
 
-def _add_header_table(document: Any, month_data: Dict[str, object], turmas: List[str]) -> None:
+def _add_evidence_header_table(
+    document: Any, month_data: Dict[str, object], turmas: List[str]
+) -> None:
     table = document.add_table(rows=3, cols=1)
     table.alignment = WD_TABLE_ALIGNMENT.LEFT
     table.autofit = True
@@ -169,7 +193,7 @@ def _add_header_table(document: Any, month_data: Dict[str, object], turmas: List
         turma_cell.add_paragraph(turma)
 
 
-def _add_meetings(document: Any, encontros: List[Dict[str, object]]) -> None:
+def _add_evidence_meetings(document: Any, encontros: List[Dict[str, object]]) -> None:
     for encontro in encontros:
         pauta_paragraph = document.add_paragraph(style="PautaTitulo")
         pauta_paragraph.add_run(
@@ -190,13 +214,14 @@ def _add_meetings(document: Any, encontros: List[Dict[str, object]]) -> None:
                 continue
             paragraph = document.add_paragraph()
             paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            run = paragraph.add_run()
-            run.add_picture(str(image_path), width=Cm(18.0))
+            paragraph.add_run().add_picture(str(image_path), width=Cm(18.0))
 
         document.add_paragraph()
 
 
-def _add_summary(document: Any, encontros: List[Dict[str, object]], total_realizados: int) -> None:
+def _add_evidence_summary(
+    document: Any, encontros: List[Dict[str, object]], total_realizados: int
+) -> None:
     title = document.add_paragraph(style="PautaTitulo")
     title.add_run("Tabela resumo com as respectivas pautas")
 
@@ -228,22 +253,119 @@ def generate_docx(
     output_dir: Path = SAIDAS_DIR,
     model_path: Optional[Path] = MODEL_DOCX_PATH,
 ) -> Path:
-    _ensure_docx_available()
     output_dir.mkdir(parents=True, exist_ok=True)
-    document = Document()
+    document = _create_document(model_path)
 
     _ensure_body_style(document)
     _set_section_layout(document)
     _add_page_number_footer(document)
-    _add_report_title(document, month_data)
+    _add_main_title(document, "Relatório Mensal de Evidências - Programa Multiplica", month_data)
     document.add_paragraph()
-    _add_header_table(document, month_data, turmas)
+    _add_evidence_header_table(document, month_data, turmas)
     document.add_paragraph()
-    _add_meetings(document, encontros)
-    _add_summary(document, encontros, total_realizados)
+    _add_evidence_meetings(document, encontros)
+    _add_evidence_summary(document, encontros, total_realizados)
 
-    file_name = f"{_sanitize_filename(month_data)}.docx"
-    output_path = output_dir / file_name
+    output_path = output_dir / f"{_sanitize_filename(month_data, 'evidencias')}.docx"
+    document.save(output_path)
+    return output_path
+
+
+def _is_payable_status(status: object) -> bool:
+    return str(status or "").strip().lower() in PAYABLE_STATUSES
+
+
+def _add_financial_header_table(document: Any, month_data: Dict[str, object]) -> None:
+    table = document.add_table(rows=6, cols=2)
+    table.alignment = WD_TABLE_ALIGNMENT.LEFT
+    table.autofit = True
+    _set_borderless(table)
+
+    rows = [
+        ("Professor multiplicador", str(month_data.get("teacher_name", "") or "")),
+        ("Tema", str(month_data.get("theme", "") or "")),
+        ("E-mail institucional", str(month_data.get("institutional_email", "") or "")),
+        ("Diretoria / URE", str(month_data.get("diretoria_ure", "") or "")),
+        ("PEC responsável", str(month_data.get("pec_responsavel", "") or "")),
+        (
+            "Valor por formação semanal",
+            _format_currency_br(int(month_data.get("weekly_rate_cents", 0) or 0)),
+        ),
+    ]
+
+    for index, (label, value) in enumerate(rows):
+        label_cell = table.cell(index, 0)
+        value_cell = table.cell(index, 1)
+        label_cell.paragraphs[0].add_run(f"{label}:").bold = True
+        value_cell.text = value
+
+
+def _add_financial_summary(document: Any, month_data: Dict[str, object], encontros: List[Dict[str, object]]) -> None:
+    weekly_rate_cents = int(month_data.get("weekly_rate_cents", 0) or 0)
+    payable_encontros = [item for item in encontros if _is_payable_status(item.get("situacao"))]
+    total_realizados = len(payable_encontros)
+    total_monthly_cents = total_realizados * weekly_rate_cents
+
+    summary = document.add_paragraph(style="PautaTitulo")
+    summary.add_run("Resumo financeiro do mês")
+
+    summary_items = [
+        ("Encontros considerados para pagamento", str(total_realizados)),
+        ("Valor por encontro", _format_currency_br(weekly_rate_cents)),
+        ("Valor total mensal estimado", _format_currency_br(total_monthly_cents)),
+    ]
+
+    for label, value in summary_items:
+        paragraph = document.add_paragraph()
+        paragraph.add_run(f"{label}: ").bold = True
+        paragraph.add_run(value)
+
+    document.add_paragraph()
+
+    title = document.add_paragraph(style="PautaTitulo")
+    title.add_run("Lançamentos do mês")
+
+    table = document.add_table(rows=1, cols=5)
+    table.alignment = WD_TABLE_ALIGNMENT.LEFT
+    table.autofit = True
+    _set_borderless(table)
+
+    header = table.rows[0].cells
+    header[0].text = "Data"
+    header[1].text = "Turma"
+    header[2].text = "Pauta"
+    header[3].text = "Situação"
+    header[4].text = "Valor"
+
+    for encontro in encontros:
+        row = table.add_row().cells
+        payable = _is_payable_status(encontro.get("situacao"))
+        row[0].text = _format_date_br(str(encontro["data_encontro"]))
+        row[1].text = str(encontro["turma_codigo"])
+        row[2].text = str(encontro["pauta_numero"])
+        row[3].text = str(encontro.get("situacao", "") or "")
+        row[4].text = _format_currency_br(weekly_rate_cents if payable else 0)
+
+
+def generate_financial_statement_docx(
+    month_data: Dict[str, object],
+    encontros: List[Dict[str, object]],
+    output_dir: Path = SAIDAS_DIR,
+    model_path: Optional[Path] = None,
+) -> Path:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    document = _create_document(model_path)
+
+    _ensure_body_style(document)
+    _set_section_layout(document)
+    _add_page_number_footer(document)
+    _add_main_title(document, "Extrato Financeiro Mensal - Programa Multiplica", month_data)
+    document.add_paragraph()
+    _add_financial_header_table(document, month_data)
+    document.add_paragraph()
+    _add_financial_summary(document, month_data, encontros)
+
+    output_path = output_dir / f"{_sanitize_filename(month_data, 'extrato_financeiro')}.docx"
     document.save(output_path)
     return output_path
 
@@ -262,8 +384,10 @@ def _find_soffice() -> Optional[str]:
 
 
 def export_pdf(docx_path: Path) -> Path:
-    docx_path = Path(docx_path)
+    docx_path = Path(docx_path).resolve()
     output_dir = docx_path.parent
+    pdf_path = docx_path.with_suffix(".pdf")
+
     soffice = _find_soffice()
     if soffice:
         subprocess.run(
@@ -279,22 +403,52 @@ def export_pdf(docx_path: Path) -> Path:
             check=True,
             capture_output=True,
         )
-        return docx_path.with_suffix(".pdf")
+        return pdf_path
 
     try:
+        import pythoncom
         import win32com.client  # type: ignore
     except ImportError as error:
         raise RuntimeError(
             "Não foi encontrado LibreOffice nem o módulo pywin32 para exportar PDF."
         ) from error
 
-    word = win32com.client.Dispatch("Word.Application")
-    word.Visible = False
-    document = word.Documents.Open(str(docx_path))
-    pdf_path = str(docx_path.with_suffix(".pdf"))
+    pythoncom.CoInitialize()
+    word = None
+    document = None
     try:
-        document.SaveAs(pdf_path, FileFormat=17)
+        word = win32com.client.DispatchEx("Word.Application")
+        word.Visible = False
+        word.DisplayAlerts = 0
+        with tempfile.TemporaryDirectory(prefix="multiplica_pdf_") as temp_dir:
+            temp_docx = Path(temp_dir) / docx_path.name
+            temp_pdf = temp_docx.with_suffix(".pdf")
+            shutil.copy2(docx_path, temp_docx)
+
+            document = word.Documents.Open(
+                str(temp_docx),
+                ReadOnly=False,
+                AddToRecentFiles=False,
+                Visible=False,
+                ConfirmConversions=False,
+            )
+            document.ExportAsFixedFormat(str(temp_pdf), 17)
+            document.Close(False)
+            document = None
+
+            if not temp_pdf.exists():
+                raise RuntimeError("O Microsoft Word não gerou o PDF temporário.")
+
+            if pdf_path.exists():
+                pdf_path.unlink()
+            shutil.copy2(temp_pdf, pdf_path)
     finally:
-        document.Close(False)
-        word.Quit()
-    return Path(pdf_path)
+        if document is not None:
+            document.Close(False)
+        if word is not None:
+            word.Quit()
+        pythoncom.CoUninitialize()
+
+    if not pdf_path.exists():
+        raise RuntimeError("O PDF não foi gerado pelo Microsoft Word.")
+    return pdf_path

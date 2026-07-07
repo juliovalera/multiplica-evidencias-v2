@@ -12,10 +12,10 @@ import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from config import APP_NAME, BACKUP_DIR, EVIDENCIAS_DIR, SAIDAS_DIR, slugify
+from config import APP_NAME, APP_VERSION, BACKUP_DIR, EVIDENCIAS_DIR, SAIDAS_DIR, slugify
 from database import Database
 from models import AUTO_OBSERVATIONS, STATUS_OPTIONS, TURMA_STATUS_OPTIONS, WEEKDAY_OPTIONS
-from relatorio import export_pdf, generate_docx
+from relatorio import export_pdf, generate_docx, generate_financial_statement_docx
 
 
 class DatePickerDialog(tk.Toplevel):
@@ -226,8 +226,8 @@ class MultiplicaApp(tk.Tk):
         super().__init__()
         self.database = database
         self.title(APP_NAME)
-        self.geometry("1440x920")
-        self.minsize(1180, 760)
+        self.geometry("1280x780")
+        self.minsize(1080, 680)
 
         self.current_month_id: int | None = None
         self.selected_turma_id: int | None = None
@@ -261,6 +261,7 @@ class MultiplicaApp(tk.Tk):
         self.email_var = tk.StringVar()
         self.diretoria_var = tk.StringVar()
         self.pec_var = tk.StringVar()
+        self.valor_formacao_semanal_var = tk.StringVar()
 
         self.turma_codigo_var = tk.StringVar()
         self.turma_dia_var = tk.StringVar(value=WEEKDAY_OPTIONS[0])
@@ -302,8 +303,8 @@ class MultiplicaApp(tk.Tk):
         )
         self.style.configure(
             "Multiplica.TNotebook.Tab",
-            padding=(16, 8, 16, 8),
-            font=("Segoe UI", 10, "bold"),
+            padding=(12, 6, 12, 6),
+            font=("Segoe UI", 9, "bold"),
             background="#e8edf3",
             foreground="#243447",
             borderwidth=1,
@@ -423,6 +424,40 @@ class MultiplicaApp(tk.Tk):
             return f"{digits[:2]}/{digits[2:]}"
         return f"{digits[:2]}/{digits[2:4]}/{digits[4:]}"
 
+    def _parse_currency_to_cents(self, value: str) -> int:
+        normalized = value.strip().replace("R$", "").replace(" ", "")
+        if "," in normalized and "." in normalized:
+            if normalized.rfind(",") > normalized.rfind("."):
+                normalized = normalized.replace(".", "").replace(",", ".")
+            else:
+                normalized = normalized.replace(",", "")
+        elif "," in normalized:
+            normalized = normalized.replace(".", "").replace(",", ".")
+        if not normalized:
+            return 0
+        amount = float(normalized)
+        return max(int(round(amount * 100)), 0)
+
+    def _format_currency_from_cents(self, cents: int) -> str:
+        value = max(cents, 0) / 100
+        formatted = f"{value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        return f"R$ {formatted}"
+
+    def _normalize_currency_field(self, _event=None) -> bool:
+        raw_value = self.valor_formacao_semanal_var.get().strip()
+        if not raw_value:
+            return True
+        try:
+            cents = self._parse_currency_to_cents(raw_value)
+        except ValueError:
+            messagebox.showwarning(
+                "Valor inválido",
+                "Informe o valor da formação semanal em formato numérico, por exemplo: 150,00",
+            )
+            return False
+        self.valor_formacao_semanal_var.set(self._format_currency_from_cents(cents))
+        return True
+
     def _resolve_display_date(self, value: str) -> datetime:
         cleaned = value.strip()
         if not cleaned:
@@ -503,11 +538,11 @@ class MultiplicaApp(tk.Tk):
         self.notebook = ttk.Notebook(self, style="Multiplica.TNotebook")
         self.notebook.pack(fill="both", expand=True, padx=10, pady=(0, 10))
 
-        self.home_tab = ttk.Frame(self.notebook, padding=14)
-        self.professor_tab = ttk.Frame(self.notebook, padding=14)
-        self.turmas_tab = ttk.Frame(self.notebook, padding=14)
-        self.encontros_tab = ttk.Frame(self.notebook, padding=14)
-        self.checklist_tab = ttk.Frame(self.notebook, padding=14)
+        self.home_tab = ttk.Frame(self.notebook, padding=10)
+        self.professor_tab = ttk.Frame(self.notebook, padding=10)
+        self.turmas_tab = ttk.Frame(self.notebook, padding=10)
+        self.encontros_tab = ttk.Frame(self.notebook, padding=10)
+        self.checklist_tab = ttk.Frame(self.notebook, padding=10)
 
         self.notebook.add(self.home_tab, text="Início")
         self.notebook.add(self.professor_tab, text="Professor Multiplicador")
@@ -525,12 +560,12 @@ class MultiplicaApp(tk.Tk):
             self,
             textvariable=self.status_bar_var,
             anchor="w",
-            padding=(12, 8),
+            padding=(8, 6),
         )
         status_bar.pack(fill="x", side="bottom")
 
     def _build_top_bar(self) -> None:
-        frame = ttk.Frame(self, padding=(10, 10, 10, 6))
+        frame = ttk.Frame(self, padding=(8, 8, 8, 4))
         frame.pack(fill="x")
 
         ttk.Label(frame, text="Meses com encontros").grid(row=0, column=0, sticky="w")
@@ -538,12 +573,12 @@ class MultiplicaApp(tk.Tk):
             frame,
             textvariable=self.current_month_label_var,
             state="readonly",
-            width=28,
+            width=24,
         )
         self.month_combo.grid(row=1, column=0, sticky="w", padx=(0, 12))
         self.month_combo.bind("<<ComboboxSelected>>", self._on_month_selected)
 
-        ttk.Button(frame, text="Abrir saidas", command=self.open_output_folder).grid(
+        ttk.Button(frame, text="Abrir saídas", command=self.open_output_folder).grid(
             row=1, column=1, padx=6
         )
         ttk.Button(frame, text="Abrir pasta das evidências", command=self.open_evidence_folder).grid(
@@ -562,7 +597,7 @@ class MultiplicaApp(tk.Tk):
         title = ttk.Label(
             self.home_tab,
             text="Multiplica Evidências",
-            font=("Segoe UI", 18, "bold"),
+            font=("Segoe UI", 16, "bold"),
         )
         title.pack(anchor="w")
 
@@ -570,20 +605,25 @@ class MultiplicaApp(tk.Tk):
             "Aplicação local para organizar encontros mensais, guardar evidências "
             "e gerar relatórios em DOCX inspirados no modelo enviado."
         )
-        ttk.Label(self.home_tab, text=body, wraplength=980, justify="left").pack(
-            anchor="w", pady=(12, 18)
+        ttk.Label(self.home_tab, text=body, wraplength=860, justify="left").pack(
+            anchor="w", pady=(8, 12)
         )
+        ttk.Label(
+            self.home_tab,
+            text=f"Versão atual: {APP_VERSION}",
+            justify="left",
+        ).pack(anchor="w", pady=(0, 8))
         ttk.Label(
             self.home_tab,
             text=(
                 "Aviso: no primeiro uso, o sistema solicita o aceite dos termos de uso "
-                "antes da utilizaÃ§Ã£o."
+                "antes da utilização."
             ),
             justify="left",
-        ).pack(anchor="w", pady=(0, 18))
+        ).pack(anchor="w", pady=(0, 12))
 
-        quick = ttk.LabelFrame(self.home_tab, text="Fluxo sugerido", padding=14)
-        quick.pack(fill="x", pady=(0, 16))
+        quick = ttk.LabelFrame(self.home_tab, text="Fluxo sugerido", padding=10)
+        quick.pack(fill="x", pady=(0, 10))
         ttk.Label(
             quick,
             text=(
@@ -596,7 +636,7 @@ class MultiplicaApp(tk.Tk):
             justify="left",
         ).pack(anchor="w")
 
-        actions = ttk.LabelFrame(self.home_tab, text="Ações rápidas", padding=14)
+        actions = ttk.LabelFrame(self.home_tab, text="Ações rápidas", padding=10)
         actions.pack(fill="x")
         buttons = [
             ("Cadastrar professor", 1),
@@ -614,10 +654,10 @@ class MultiplicaApp(tk.Tk):
                     if tab_index is None
                     else lambda index=tab_index: self.notebook.select(index)
                 ),
-            ).grid(row=0, column=column, padx=(0, 10), pady=4, sticky="w")
+            ).grid(row=0, column=column, padx=(0, 8), pady=2, sticky="w")
 
     def _build_professor_tab(self) -> None:
-        frame = ttk.LabelFrame(self.professor_tab, text="Dados do professor multiplicador", padding=14)
+        frame = ttk.LabelFrame(self.professor_tab, text="Dados do professor multiplicador", padding=10)
         frame.pack(fill="x", anchor="n")
 
         labels = [
@@ -626,16 +666,18 @@ class MultiplicaApp(tk.Tk):
             ("E-mail institucional", self.email_var),
             ("Diretoria / URE", self.diretoria_var),
             ("PEC responsável", self.pec_var),
+            ("Valor por formação semanal (R$)", self.valor_formacao_semanal_var),
         ]
         for row, (label, variable) in enumerate(labels):
             ttk.Label(frame, text=label).grid(row=row, column=0, sticky="w", pady=4)
-            ttk.Entry(frame, textvariable=variable, width=78).grid(
-                row=row, column=1, sticky="ew", pady=4, padx=(12, 0)
-            )
+            entry = ttk.Entry(frame, textvariable=variable, width=68)
+            entry.grid(row=row, column=1, sticky="ew", pady=4, padx=(12, 0))
+            if variable is self.valor_formacao_semanal_var:
+                entry.bind("<FocusOut>", self._normalize_currency_field, add="+")
 
         frame.columnconfigure(1, weight=1)
 
-        button_row = ttk.Frame(self.professor_tab, padding=(0, 14, 0, 0))
+        button_row = ttk.Frame(self.professor_tab, padding=(0, 10, 0, 0))
         button_row.pack(fill="x")
         ttk.Button(button_row, text="Salvar dados do professor", command=self.save_current_month).pack(
             side="left"
@@ -655,14 +697,14 @@ class MultiplicaApp(tk.Tk):
         top = ttk.Frame(self.turmas_tab)
         top.pack(fill="both", expand=True)
 
-        form = ttk.LabelFrame(top, text="Cadastro de turma", padding=14)
+        form = ttk.LabelFrame(top, text="Cadastro de turma", padding=10)
         form.pack(fill="x", anchor="n")
 
         fields = [
-            ("Código da turma", self.turma_codigo_var, 58),
+            ("Código da turma", self.turma_codigo_var, 44),
             ("Dia da semana", self.turma_dia_var, 12),
-            ("Horário", self.turma_horario_var, 14),
-            ("Tema / componente", self.turma_componente_var, 28),
+            ("Horário", self.turma_horario_var, 10),
+            ("Tema / componente", self.turma_componente_var, 24),
             ("Situação", self.turma_situacao_var, 12),
         ]
 
@@ -700,7 +742,7 @@ class MultiplicaApp(tk.Tk):
         ).grid(row=1, column=5, sticky="w", pady=4, padx=(12, 0))
 
         buttons = ttk.Frame(form)
-        buttons.grid(row=2, column=0, columnspan=6, sticky="w", pady=(10, 0))
+        buttons.grid(row=2, column=0, columnspan=6, sticky="w", pady=(8, 0))
         ttk.Button(buttons, text="Salvar turma", command=self.save_turma).pack(side="left")
         ttk.Button(buttons, text="Nova turma", command=self.clear_turma_form).pack(
             side="left", padx=(10, 0)
@@ -716,11 +758,11 @@ class MultiplicaApp(tk.Tk):
             command=self.toggle_selected_turma_status,
         ).pack(side="left", padx=(10, 0))
 
-        tree_frame = ttk.LabelFrame(top, text="Turmas cadastradas", padding=10)
-        tree_frame.pack(fill="both", expand=True, pady=(14, 0))
+        tree_frame = ttk.LabelFrame(top, text="Turmas cadastradas", padding=8)
+        tree_frame.pack(fill="both", expand=True, pady=(10, 0))
 
         columns = ("codigo", "dia", "horario", "componente", "situacao")
-        self.turma_tree = ttk.Treeview(tree_frame, columns=columns, show="headings", height=12)
+        self.turma_tree = ttk.Treeview(tree_frame, columns=columns, show="headings", height=10)
         headers = {
             "codigo": "Código",
             "dia": "Dia",
@@ -729,10 +771,10 @@ class MultiplicaApp(tk.Tk):
             "situacao": "Situação",
         }
         min_widths = {
-            "codigo": 180,
+            "codigo": 150,
             "dia": 70,
             "horario": 80,
-            "componente": 160,
+            "componente": 150,
             "situacao": 90,
         }
         weights = {
@@ -757,12 +799,12 @@ class MultiplicaApp(tk.Tk):
         paned = ttk.Panedwindow(self.encontros_tab, orient="horizontal")
         paned.pack(fill="both", expand=True)
 
-        left = ttk.Frame(paned, padding=(0, 0, 10, 0))
+        left = ttk.Frame(paned, padding=(0, 0, 8, 0))
         right = ttk.Frame(paned)
         paned.add(left, weight=2)
-        paned.add(right, weight=3)
+        paned.add(right, weight=2)
 
-        form = ttk.LabelFrame(left, text="Registro de encontro", padding=14)
+        form = ttk.LabelFrame(left, text="Registro de encontro", padding=10)
         form.pack(fill="x", anchor="n")
 
         ttk.Label(form, text="Turma").grid(row=0, column=0, sticky="w", pady=4)
@@ -770,7 +812,7 @@ class MultiplicaApp(tk.Tk):
             form,
             textvariable=self.encontro_turma_var,
             state="readonly",
-            width=48,
+            width=40,
         )
         self.encontro_turma_combo.grid(
             row=0, column=1, columnspan=4, sticky="ew", pady=4, padx=(12, 0)
@@ -780,32 +822,32 @@ class MultiplicaApp(tk.Tk):
         ttk.Label(form, text="Data (dd/mm/aaaa ou aaaa-mm-dd)").grid(
             row=1, column=0, sticky="w", pady=4
         )
-        encontro_data_entry = ttk.Entry(form, textvariable=self.encontro_data_var, width=24)
+        encontro_data_entry = ttk.Entry(form, textvariable=self.encontro_data_var, width=16)
         encontro_data_entry.grid(row=1, column=1, sticky="w", padx=(12, 8), pady=4)
         self._register_formatted_entry(encontro_data_entry, self._format_date_live)
         ttk.Button(form, text="Calendário", command=self.open_encontro_calendar).grid(
             row=1, column=2, sticky="w", pady=4, padx=(0, 16)
         )
         ttk.Label(form, text="Número da pauta").grid(row=1, column=3, sticky="w", pady=4)
-        ttk.Entry(form, textvariable=self.encontro_pauta_var, width=10).grid(
+        ttk.Entry(form, textvariable=self.encontro_pauta_var, width=8).grid(
             row=1, column=4, sticky="w", padx=(12, 0), pady=4
         )
 
         ttk.Label(form, text="Início").grid(row=2, column=0, sticky="w", pady=4)
-        encontro_inicio_entry = ttk.Entry(form, textvariable=self.encontro_inicio_var, width=12)
+        encontro_inicio_entry = ttk.Entry(form, textvariable=self.encontro_inicio_var, width=10)
         encontro_inicio_entry.grid(row=2, column=1, sticky="w", padx=(12, 16), pady=4)
         self._register_formatted_entry(encontro_inicio_entry, self._format_time_live)
         ttk.Label(form, text="Término").grid(row=2, column=3, sticky="w", pady=4)
-        encontro_fim_entry = ttk.Entry(form, textvariable=self.encontro_fim_var, width=12)
+        encontro_fim_entry = ttk.Entry(form, textvariable=self.encontro_fim_var, width=10)
         encontro_fim_entry.grid(row=2, column=4, sticky="w", padx=(12, 0), pady=4)
         self._register_formatted_entry(encontro_fim_entry, self._format_time_live)
 
         ttk.Label(form, text="Participantes").grid(row=3, column=0, sticky="w", pady=4)
-        ttk.Entry(form, textvariable=self.encontro_participantes_var, width=12).grid(
+        ttk.Entry(form, textvariable=self.encontro_participantes_var, width=10).grid(
             row=3, column=1, sticky="w", padx=(12, 16), pady=4
         )
         ttk.Label(form, text="Duração").grid(row=3, column=3, sticky="w", pady=4)
-        ttk.Entry(form, textvariable=self.encontro_duracao_var, width=12).grid(
+        ttk.Entry(form, textvariable=self.encontro_duracao_var, width=10).grid(
             row=3, column=4, sticky="w", padx=(12, 0), pady=4
         )
 
@@ -815,7 +857,7 @@ class MultiplicaApp(tk.Tk):
             values=STATUS_OPTIONS,
             textvariable=self.encontro_status_var,
             state="readonly",
-            width=20,
+            width=16,
         ).grid(row=4, column=1, sticky="w", padx=(12, 16), pady=4)
 
         ttk.Label(form, text="Texto automático").grid(row=4, column=3, sticky="w", pady=4)
@@ -824,7 +866,7 @@ class MultiplicaApp(tk.Tk):
             values=self.auto_observacao_names,
             textvariable=self.auto_observacao_var,
             state="readonly",
-            width=30,
+            width=24,
         ).grid(row=4, column=4, sticky="w", padx=(12, 0), pady=4)
 
         ttk.Button(form, text="Aplicar texto", command=self.apply_auto_observation).grid(
@@ -832,7 +874,7 @@ class MultiplicaApp(tk.Tk):
         )
 
         ttk.Label(form, text="Observação").grid(row=5, column=0, sticky="nw", pady=(10, 4))
-        self.observacao_text = tk.Text(form, width=68, height=7, wrap="word")
+        self.observacao_text = tk.Text(form, width=62, height=5, wrap="word")
         self.observacao_text.grid(row=6, column=0, columnspan=5, sticky="ew", pady=(0, 8))
 
         action_row = ttk.Frame(form)
@@ -850,13 +892,13 @@ class MultiplicaApp(tk.Tk):
         form.columnconfigure(1, weight=1)
         form.columnconfigure(4, weight=1)
 
-        evidence_frame = ttk.LabelFrame(left, text="Evidências do encontro", padding=14)
-        evidence_frame.pack(fill="both", expand=True, pady=(14, 0))
+        evidence_frame = ttk.LabelFrame(left, text="Evidências do encontro", padding=10)
+        evidence_frame.pack(fill="both", expand=True, pady=(10, 0))
 
         evidence_list_frame = ttk.Frame(evidence_frame)
         evidence_list_frame.pack(fill="both", expand=True)
 
-        self.evidence_listbox = tk.Listbox(evidence_list_frame, height=12)
+        self.evidence_listbox = tk.Listbox(evidence_list_frame, height=9)
         self.evidence_listbox.pack(side="left", fill="both", expand=True)
         self.evidence_listbox.bind("<<ListboxSelect>>", self._on_evidence_selected)
 
@@ -886,8 +928,8 @@ class MultiplicaApp(tk.Tk):
         right_paned = ttk.Panedwindow(right, orient="vertical")
         right_paned.pack(fill="both", expand=True)
 
-        encontro_list_frame = ttk.LabelFrame(right_paned, text="Encontros do mês", padding=10)
-        preview_frame = ttk.LabelFrame(right_paned, text="Pré-visualização da evidência", padding=10)
+        encontro_list_frame = ttk.LabelFrame(right_paned, text="Encontros do mês", padding=8)
+        preview_frame = ttk.LabelFrame(right_paned, text="Pré-visualização da evidência", padding=8)
         right_paned.add(encontro_list_frame, weight=1)
         right_paned.add(preview_frame, weight=1)
 
@@ -896,7 +938,7 @@ class MultiplicaApp(tk.Tk):
             encontro_list_frame,
             columns=columns,
             show="headings",
-            height=22,
+            height=15,
         )
         headers = {
             "data": "Data",
@@ -909,10 +951,10 @@ class MultiplicaApp(tk.Tk):
         min_widths = {
             "data": 80,
             "pauta": 70,
-            "turma": 130,
+            "turma": 115,
             "status": 100,
-            "participantes": 95,
-            "imagens": 75,
+            "participantes": 88,
+            "imagens": 68,
         }
         weights = {
             "data": 12,
@@ -950,22 +992,24 @@ class MultiplicaApp(tk.Tk):
         self.preview_canvas.bind("<Configure>", lambda _event: self._render_preview_image())
 
     def _build_checklist_tab(self) -> None:
-        summary = ttk.LabelFrame(self.checklist_tab, text="Conferencia mensal", padding=14)
+        summary = ttk.LabelFrame(self.checklist_tab, text="Conferência mensal", padding=10)
         summary.pack(fill="x")
 
         self.checklist_labels: dict[str, ttk.Label] = {}
         rows = [
-            "total_registrados",
-            "total_realizados",
-            "turmas",
-            "pautas",
-            "sem_imagem",
-            "sem_observacao",
-            "sem_horario",
-            "sem_participantes",
+            ("total_registrados", "Total registrados"),
+            ("total_realizados", "Total realizados"),
+            ("valor_formacao_semanal", "Valor formação semanal"),
+            ("valor_total_mensal", "Valor total mensal"),
+            ("turmas", "Turmas"),
+            ("pautas", "Pautas"),
+            ("sem_imagem", "Sem imagem"),
+            ("sem_observacao", "Sem observação"),
+            ("sem_horario", "Sem horário"),
+            ("sem_participantes", "Sem participantes"),
         ]
-        for row, key in enumerate(rows):
-            ttk.Label(summary, text=key.replace("_", " ").title()).grid(
+        for row, (key, label_text) in enumerate(rows):
+            ttk.Label(summary, text=label_text).grid(
                 row=row, column=0, sticky="w", pady=2
             )
             label = ttk.Label(summary, text="-")
@@ -974,15 +1018,15 @@ class MultiplicaApp(tk.Tk):
 
         detail_frame = ttk.LabelFrame(
             self.checklist_tab,
-            text="Pendencias e detalhes",
-            padding=14,
+            text="Pendências e detalhes",
+            padding=10,
         )
-        detail_frame.pack(fill="both", expand=True, pady=(14, 0))
+        detail_frame.pack(fill="both", expand=True, pady=(10, 0))
 
-        self.checklist_listbox = tk.Listbox(detail_frame, height=18)
+        self.checklist_listbox = tk.Listbox(detail_frame, height=14)
         self.checklist_listbox.pack(fill="both", expand=True)
 
-        action_row = ttk.Frame(self.checklist_tab, padding=(0, 14, 0, 0))
+        action_row = ttk.Frame(self.checklist_tab, padding=(0, 10, 0, 0))
         action_row.pack(fill="x")
         self.refresh_checklist_button = ttk.Button(
             action_row, text="Atualizar checklist", command=self.refresh_checklist
@@ -998,6 +1042,12 @@ class MultiplicaApp(tk.Tk):
             action_row, text="Gerar relatório PDF", command=self.generate_pdf_report
         )
         self.generate_pdf_button.pack(side="left", padx=(10, 0))
+        self.generate_financial_button = ttk.Button(
+            action_row,
+            text="Gerar extrato financeiro",
+            command=self.generate_financial_report,
+        )
+        self.generate_financial_button.pack(side="left", padx=(10, 0))
         self.open_evidence_button = ttk.Button(
             action_row,
             text="Abrir pasta das evidências",
@@ -1005,7 +1055,7 @@ class MultiplicaApp(tk.Tk):
         )
         self.open_evidence_button.pack(side="left", padx=(10, 0))
         self.open_output_button = ttk.Button(
-            action_row, text="Abrir pasta de saida", command=self.open_output_folder
+            action_row, text="Abrir pasta de saída", command=self.open_output_folder
         )
         self.open_output_button.pack(side="left", padx=(10, 0))
 
@@ -1070,6 +1120,7 @@ class MultiplicaApp(tk.Tk):
         self.email_var.set(row["institutional_email"])
         self.diretoria_var.set(row["diretoria_ure"])
         self.pec_var.set(row["pec_responsavel"])
+        self.valor_formacao_semanal_var.set(self._format_currency_from_cents(int(row["weekly_rate_cents"] or 0)))
         self.status_bar_var.set(
             f"Mês ativo: {row['ref_label']} | Dados mantidos apenas localmente."
         )
@@ -1086,17 +1137,22 @@ class MultiplicaApp(tk.Tk):
             "email_institucional": self.email_var.get().strip(),
             "diretoria_ure": self.diretoria_var.get().strip(),
             "pec_responsavel": self.pec_var.get().strip(),
+            "valor_formacao_semanal": self.valor_formacao_semanal_var.get().strip(),
         }
 
     def save_current_month(self) -> None:
         if not self.current_month_id:
             messagebox.showwarning("Mês não selecionado", "Crie ou selecione um mês primeiro.")
             return
+        if not self._normalize_currency_field():
+            return
         self.database.save_month(self.current_month_id, self.collect_professor_data())
         self.status_bar_var.set("Dados do mês atualizados.")
         messagebox.showinfo("Dados salvos", "Os dados do professor foram salvos no mês ativo.")
 
     def save_defaults(self) -> None:
+        if not self._normalize_currency_field():
+            return
         self.database.save_defaults(self.collect_professor_data())
         self.status_bar_var.set("Padrão do professor atualizado.")
         messagebox.showinfo("Padrão salvo", "Os dados foram gravados como padrão para próximos meses.")
@@ -1108,6 +1164,7 @@ class MultiplicaApp(tk.Tk):
         self.email_var.set(defaults.get("email_institucional", ""))
         self.diretoria_var.set(defaults.get("diretoria_ure", ""))
         self.pec_var.set(defaults.get("pec_responsavel", ""))
+        self.valor_formacao_semanal_var.set(defaults.get("valor_formacao_semanal", ""))
 
     def clear_turma_form(self) -> None:
         self.selected_turma_id = None
@@ -1259,6 +1316,8 @@ class MultiplicaApp(tk.Tk):
     def _get_or_create_month_from_iso_date(self, iso_date: str) -> int:
         encounter_date = datetime.strptime(iso_date, "%Y-%m-%d")
         month_id = self.database.get_or_create_month(encounter_date.month, encounter_date.year)
+        if not self._normalize_currency_field():
+            raise ValueError("Informe um valor válido para a formação semanal.")
         self.database.save_month(month_id, self.collect_professor_data())
         return month_id
 
@@ -1641,7 +1700,7 @@ class MultiplicaApp(tk.Tk):
             messagebox.showwarning("Selecione uma imagem", "Escolha uma evidência para remover.")
             return
 
-        if not messagebox.askyesno("Remover imagem", "Deseja remover a evidência selecionada?"):
+        if not messagebox.askyesno("Remover imagem", "Deseja remover a evidência selecionada"):
             return
 
         removed_path = self.database.delete_evidence(int(row["id"]))
@@ -1669,6 +1728,12 @@ class MultiplicaApp(tk.Tk):
 
         self.checklist_labels["total_registrados"].configure(text=str(checklist["total_registrados"]))
         self.checklist_labels["total_realizados"].configure(text=str(checklist["total_realizados"]))
+        self.checklist_labels["valor_formacao_semanal"].configure(
+            text=self._format_currency_from_cents(int(checklist["valor_formacao_semanal_centavos"]))
+        )
+        self.checklist_labels["valor_total_mensal"].configure(
+            text=self._format_currency_from_cents(int(checklist["valor_total_mensal_centavos"]))
+        )
         self.checklist_labels["turmas"].configure(
             text=", ".join(checklist["turmas"]) if checklist["turmas"] else "-"
         )
@@ -1717,6 +1782,8 @@ class MultiplicaApp(tk.Tk):
             messagebox.showwarning("Mês não selecionado", "Crie ou selecione um mês primeiro.")
             return None
 
+        if not self._normalize_currency_field():
+            return None
         self.database.save_month(self.current_month_id, self.collect_professor_data())
         return self.database.get_month_bundle(self.current_month_id)
 
@@ -1725,6 +1792,7 @@ class MultiplicaApp(tk.Tk):
         button_state = "disabled" if in_progress else "normal"
         self.generate_docx_button.configure(state=button_state)
         self.generate_pdf_button.configure(state=button_state)
+        self.generate_financial_button.configure(state=button_state)
         self.refresh_checklist_button.configure(state=button_state)
         self.open_evidence_button.configure(state=button_state)
         self.open_output_button.configure(state=button_state)
@@ -1750,9 +1818,12 @@ class MultiplicaApp(tk.Tk):
         if not bundle:
             return
 
-        progress_message = (
-            "Gerando relatório DOCX..." if report_type == "docx" else "Gerando relatório PDF..."
-        )
+        progress_messages = {
+            "docx": "Gerando relatório DOCX...",
+            "pdf": "Gerando relatório PDF...",
+            "financial": "Gerando extrato financeiro...",
+        }
+        progress_message = progress_messages.get(report_type, "Processando arquivo...")
         self._set_report_generation_state(True, progress_message)
         self.status_bar_var.set(progress_message)
 
@@ -1765,17 +1836,23 @@ class MultiplicaApp(tk.Tk):
 
     def _run_report_generation_task(self, report_type: str, bundle: dict[str, object]) -> None:
         try:
-            docx_path = generate_docx(
-                month_data=bundle["month"],
-                encontros=bundle["encontros"],
-                turmas=bundle["turmas"],
-                total_realizados=bundle["checklist"]["total_realizados"],
-                output_dir=SAIDAS_DIR,
-            )
+            if report_type == "financial":
+                output_path = generate_financial_statement_docx(
+                    month_data=bundle["month"],
+                    encontros=bundle["encontros"],
+                    output_dir=SAIDAS_DIR,
+                )
+            else:
+                docx_path = generate_docx(
+                    month_data=bundle["month"],
+                    encontros=bundle["encontros"],
+                    turmas=bundle["turmas"],
+                    total_realizados=bundle["checklist"]["total_realizados"],
+                    output_dir=SAIDAS_DIR,
+                )
+                output_path = docx_path
             if report_type == "pdf":
                 output_path = export_pdf(docx_path)
-            else:
-                output_path = docx_path
         except Exception as error:
             self.after(0, lambda err=error, kind=report_type: self._finish_report_generation_error(kind, err))
             return
@@ -1789,6 +1866,15 @@ class MultiplicaApp(tk.Tk):
             messagebox.showinfo(
                 "PDF pronto",
                 "Relatório gerado com sucesso.\n\n"
+                f"Arquivo:\n{output_path}\n\n"
+                "Você pode encontrá-lo na pasta 'saídas' do programa.\n"
+                "Se preferir, clique no botão 'Abrir saídas' para acessar a pasta.",
+            )
+        elif report_type == "financial":
+            self.status_bar_var.set(f"Extrato financeiro gerado em {output_path.name}.")
+            messagebox.showinfo(
+                "Extrato financeiro pronto",
+                "Extrato gerado com sucesso.\n\n"
                 f"Arquivo:\n{output_path}\n\n"
                 "Você pode encontrá-lo na pasta 'saídas' do programa.\n"
                 "Se preferir, clique no botão 'Abrir saídas' para acessar a pasta.",
@@ -1813,6 +1899,9 @@ class MultiplicaApp(tk.Tk):
                 "Instale o LibreOffice ou use o Microsoft Word com pywin32.",
             )
             self.status_bar_var.set("Falha ao gerar relatório PDF.")
+        elif report_type == "financial":
+            messagebox.showerror("Falha ao gerar extrato", str(error))
+            self.status_bar_var.set("Falha ao gerar extrato financeiro.")
         else:
             messagebox.showerror("Falha ao gerar DOCX", str(error))
             self.status_bar_var.set("Falha ao gerar relatório DOCX.")
@@ -1822,6 +1911,9 @@ class MultiplicaApp(tk.Tk):
 
     def generate_pdf_report(self) -> None:
         self._start_report_generation("pdf")
+
+    def generate_financial_report(self) -> None:
+        self._start_report_generation("financial")
 
     def show_about_dialog(self) -> None:
         dialog = tk.Toplevel(self)
@@ -1839,6 +1931,11 @@ class MultiplicaApp(tk.Tk):
             text="Multiplica Evidências",
             font=("Segoe UI", 16, "bold"),
         ).pack(anchor="w")
+        ttk.Label(
+            container,
+            text=f"Versão {APP_VERSION}",
+            font=("Segoe UI", 10, "bold"),
+        ).pack(anchor="w", pady=(2, 2))
         ttk.Label(
             container,
             text="Júlio César Valera • Professor de Matemática, Programação e Robótica",

@@ -37,6 +37,7 @@ class Database:
                     institutional_email TEXT NOT NULL DEFAULT '',
                     diretoria_ure TEXT NOT NULL DEFAULT '',
                     pec_responsavel TEXT NOT NULL DEFAULT '',
+                    weekly_rate_cents INTEGER NOT NULL DEFAULT 0,
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(ref_month, ref_year)
@@ -82,7 +83,48 @@ class Database:
                 );
                 """
             )
+            self._ensure_column(
+                connection,
+                "month_records",
+                "weekly_rate_cents",
+                "INTEGER NOT NULL DEFAULT 0",
+            )
         self.reconcile_data_by_encounter_date()
+
+    def _ensure_column(
+        self,
+        connection: sqlite3.Connection,
+        table_name: str,
+        column_name: str,
+        column_sql: str,
+    ) -> None:
+        columns = connection.execute(f"PRAGMA table_info({table_name})").fetchall()
+        if any(str(column["name"]) == column_name for column in columns):
+            return
+        connection.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_sql}")
+
+    def _parse_currency_to_cents(self, value: object) -> int:
+        if value is None:
+            return 0
+        if isinstance(value, int):
+            return max(value, 0)
+        if isinstance(value, float):
+            return max(int(round(value * 100)), 0)
+
+        normalized = str(value).strip()
+        if not normalized:
+            return 0
+
+        normalized = normalized.replace("R$", "").replace(" ", "")
+        if "," in normalized and "." in normalized:
+            if normalized.rfind(",") > normalized.rfind("."):
+                normalized = normalized.replace(".", "").replace(",", ".")
+            else:
+                normalized = normalized.replace(",", "")
+        elif "," in normalized:
+            normalized = normalized.replace(".", "").replace(",", ".")
+        amount = float(normalized)
+        return max(int(round(amount * 100)), 0)
 
     def reconcile_data_by_encounter_date(self) -> int:
         defaults = self.get_defaults()
@@ -132,9 +174,10 @@ class Database:
                             theme,
                             institutional_email,
                             diretoria_ure,
-                            pec_responsavel
+                            pec_responsavel,
+                            weekly_rate_cents
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             encounter_date.month,
@@ -145,6 +188,7 @@ class Database:
                             defaults["email_institucional"],
                             defaults["diretoria_ure"],
                             defaults["pec_responsavel"],
+                            self._parse_currency_to_cents(defaults.get("valor_formacao_semanal", "")),
                         ),
                     )
                     target_month_id = int(cursor.lastrowid)
@@ -211,11 +255,12 @@ class Database:
             "email_institucional",
             "diretoria_ure",
             "pec_responsavel",
+            "valor_formacao_semanal",
         ]
         defaults = {key: "" for key in keys}
         with self.connect() as connection:
             rows = connection.execute(
-                "SELECT key, value FROM app_config WHERE key IN (?, ?, ?, ?, ?)",
+                "SELECT key, value FROM app_config WHERE key IN (?, ?, ?, ?, ?, ?)",
                 keys,
             ).fetchall()
         for row in rows:
@@ -296,9 +341,10 @@ class Database:
                     theme,
                     institutional_email,
                     diretoria_ure,
-                    pec_responsavel
+                    pec_responsavel,
+                    weekly_rate_cents
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     ref_month,
@@ -309,6 +355,7 @@ class Database:
                     defaults["email_institucional"],
                     defaults["diretoria_ure"],
                     defaults["pec_responsavel"],
+                    self._parse_currency_to_cents(defaults.get("valor_formacao_semanal", "")),
                 ),
             )
             return int(cursor.lastrowid)
@@ -327,6 +374,7 @@ class Database:
                     institutional_email = ?,
                     diretoria_ure = ?,
                     pec_responsavel = ?,
+                    weekly_rate_cents = ?,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
                 """,
@@ -336,6 +384,7 @@ class Database:
                     data.get("email_institucional", ""),
                     data.get("diretoria_ure", ""),
                     data.get("pec_responsavel", ""),
+                    self._parse_currency_to_cents(data.get("valor_formacao_semanal", "")),
                     month_id,
                 ),
             )
@@ -401,9 +450,11 @@ class Database:
                 SELECT
                     encontros.*,
                     turmas.codigo AS turma_codigo,
+                    month_records.weekly_rate_cents AS weekly_rate_cents,
                     (SELECT COUNT(*) FROM evidencias WHERE encontro_id = encontros.id) AS total_imagens
                 FROM encontros
                 JOIN turmas ON turmas.id = encontros.turma_id
+                JOIN month_records ON month_records.id = encontros.month_id
                 WHERE encontros.month_id = ?
                 ORDER BY encontros.data_encontro, encontros.pauta_numero, turmas.codigo
                 """,
@@ -591,10 +642,15 @@ class Database:
             issues.append("Existem encontros sem participantes informados.")
 
         realizados = counts_by_status.get("realizado", 0) + counts_by_status.get("sem cursistas", 0)
+        month = self.get_month(month_id)
+        weekly_rate_cents = int(month["weekly_rate_cents"] or 0) if month else 0
+        total_monthly_cents = realizados * weekly_rate_cents
 
         return {
             "total_registrados": len(encontros),
             "total_realizados": realizados,
+            "valor_formacao_semanal_centavos": weekly_rate_cents,
+            "valor_total_mensal_centavos": total_monthly_cents,
             "turmas": turmas,
             "pautas": pautas,
             "sem_imagem": sem_imagem,
