@@ -1137,13 +1137,18 @@ class MultiplicaApp(tk.Tk):
         )
 
         ttk.Label(form, text="Situação").grid(row=4, column=0, sticky="w", pady=4)
-        ttk.Combobox(
+        self.encontro_status_combo = ttk.Combobox(
             form,
             values=STATUS_OPTIONS,
             textvariable=self.encontro_status_var,
             state="readonly",
             width=16,
-        ).grid(row=4, column=1, sticky="w", padx=(12, 16), pady=4)
+        )
+        self.encontro_status_combo.grid(row=4, column=1, sticky="w", padx=(12, 16), pady=4)
+        self.encontro_status_combo.bind(
+            "<<ComboboxSelected>>",
+            self._on_encontro_status_selected,
+        )
 
         ttk.Label(form, text="Texto automático").grid(row=4, column=3, sticky="w", pady=4)
         ttk.Combobox(
@@ -1624,8 +1629,22 @@ class MultiplicaApp(tk.Tk):
         content.pack(fill="both", expand=True, pady=(10, 0))
         left = ttk.Frame(content)
         right = ttk.Frame(content)
-        content.add(left, weight=2)
-        content.add(right, weight=3)
+        content.add(left, weight=1)
+        content.add(right, weight=1)
+
+        def _equalize_ocorrencias_panes(_event=None) -> None:
+            if len(content.panes()) < 2:
+                return
+            total_width = content.winfo_width()
+            if total_width <= 1:
+                return
+            try:
+                content.sashpos(0, total_width // 2)
+            except tk.TclError:
+                return
+
+        content.bind("<Configure>", _equalize_ocorrencias_panes)
+        self.after_idle(_equalize_ocorrencias_panes)
 
         left_canvas = tk.Canvas(
             left,
@@ -1722,7 +1741,7 @@ class MultiplicaApp(tk.Tk):
         ttk.Entry(form, textvariable=self.acompanhamento_resumo_var, width=40).grid(
             row=4, column=1, columnspan=3, sticky="ew", padx=(10, 0), pady=4
         )
-        ttk.Label(form, text="Resolução").grid(row=5, column=0, sticky="w", pady=4)
+        ttk.Label(form, text="Data de resolução").grid(row=5, column=0, sticky="w", pady=4)
         data_resolucao_entry = ttk.Entry(
             form,
             textvariable=self.acompanhamento_data_resolucao_var,
@@ -2309,6 +2328,24 @@ class MultiplicaApp(tk.Tk):
 
     def _parse_optional_date(self, raw_value: str) -> str:
         return self._parse_date(raw_value) if raw_value.strip() else ""
+
+    def _confirm_socializacao_reference_mismatch(
+        self,
+        data_envio_iso: str,
+        reference_month: int,
+        reference_year: int,
+    ) -> bool:
+        envio = datetime.strptime(data_envio_iso, "%Y-%m-%d")
+        if envio.month == reference_month and envio.year == reference_year:
+            return True
+        return messagebox.askyesno(
+            "Divergência de período",
+            (
+                f"A data de envio pertence a {envio.month:02d}/{envio.year}, mas o mês de "
+                f"referência informado é {reference_month:02d}/{reference_year}.\n\n"
+                "Deseja continuar assim mesmo?"
+            ),
+        )
 
     def _get_turma_values_for_combos(self) -> list[str]:
         active_labels = list(self.encontro_turma_combo["values"]) if hasattr(self, "encontro_turma_combo") else []
@@ -3304,6 +3341,14 @@ class MultiplicaApp(tk.Tk):
             messagebox.showwarning("Data inválida", str(error))
             return None
 
+        if payload["data_envio"] and not self._confirm_socializacao_reference_mismatch(
+            str(payload["data_envio"]),
+            month,
+            year,
+        ):
+            self.status_bar_var.set("Salvamento da socialização cancelado para revisão do período.")
+            return None
+
         self.selected_socializacao_id = self.database.upsert_socializacao_mensal(payload)
         self.refresh_socializacao_tree(select_item=f"s{self.selected_socializacao_id}")
         self.refresh_socializacao_movimentacoes_list()
@@ -3665,6 +3710,13 @@ class MultiplicaApp(tk.Tk):
         self.observacao_text.delete("1.0", "end")
         self.observacao_text.insert("1.0", text)
 
+    def _on_encontro_status_selected(self, _event=None) -> None:
+        self._sync_encontro_participantes_with_status()
+
+    def _sync_encontro_participantes_with_status(self) -> None:
+        if self.encontro_status_var.get().strip() == "sem cursistas":
+            self.encontro_participantes_var.set("0")
+
     def _parse_date(self, raw_value: str) -> str:
         text = raw_value.strip()
         if not text:
@@ -3720,13 +3772,18 @@ class MultiplicaApp(tk.Tk):
         except ValueError as error:
             raise ValueError("O número da pauta precisa ser numérico.") from error
 
+        situacao = self.encontro_status_var.get().strip() or STATUS_OPTIONS[0]
         participantes_text = self.encontro_participantes_var.get().strip()
-        participantes = None
-        if participantes_text:
-            try:
-                participantes = int(participantes_text)
-            except ValueError as error:
-                raise ValueError("Participantes precisa ser um numero inteiro.") from error
+        if situacao == "sem cursistas":
+            participantes_text = "0"
+            self.encontro_participantes_var.set("0")
+        elif not participantes_text:
+            participantes_text = "0"
+            self.encontro_participantes_var.set("0")
+        try:
+            participantes = int(participantes_text)
+        except ValueError as error:
+            raise ValueError("Participantes precisa ser um numero inteiro.") from error
 
         data_encontro = self._parse_date(self.encontro_data_var.get())
         month_id = self._get_or_create_month_from_iso_date(data_encontro)
@@ -3741,7 +3798,7 @@ class MultiplicaApp(tk.Tk):
             "participantes": participantes,
             "duracao": self.encontro_duracao_var.get().strip(),
             "observacao": self.observacao_text.get("1.0", "end").strip(),
-            "situacao": self.encontro_status_var.get().strip() or STATUS_OPTIONS[0],
+            "situacao": situacao,
         }
 
     def save_encontro(self, show_message: bool = True) -> int | None:
@@ -3822,6 +3879,7 @@ class MultiplicaApp(tk.Tk):
         )
         self.encontro_duracao_var.set(row["duracao"])
         self.encontro_status_var.set(row["situacao"])
+        self._sync_encontro_participantes_with_status()
         self.observacao_text.delete("1.0", "end")
         self.observacao_text.insert("1.0", row["observacao"])
         self.refresh_evidence_list()

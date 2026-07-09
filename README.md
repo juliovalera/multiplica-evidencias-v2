@@ -19,11 +19,11 @@
   <img alt="SQLite" src="https://img.shields.io/badge/Banco-SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white">
   <img alt="DOCX/PDF" src="https://img.shields.io/badge/Relat%C3%B3rios-DOCX%20%2F%20PDF-8A2BE2?style=for-the-badge">
   <img alt="Licença MIT" src="https://img.shields.io/badge/Licen%C3%A7a-MIT-E0A800?style=for-the-badge">
-  <img alt="Versão 2,008" src="https://img.shields.io/badge/Vers%C3%A3o-2.008-7B1FA2?style=for-the-badge">
+  <img alt="Versão 2,013" src="https://img.shields.io/badge/Vers%C3%A3o-2.013-7B1FA2?style=for-the-badge">
 </p>
 
 <p>
-  <strong>Versão atual:</strong> <code>2,008</code> &nbsp;•&nbsp;
+  <strong>Versão atual:</strong> <code>2,013</code> &nbsp;•&nbsp;
   <strong>Primeira publicação pública:</strong> <code>1.000</code>
 </p>
 
@@ -215,7 +215,7 @@ O projeto adota um versionamento incremental a partir da publicação pública i
 - `1.000` → publicação pública inicial
 - `1,027` → última versão estável da linha pública inicial
 - `2,000` → início da linha 2 em repositório público separado, com evolução funcional mais avançada
-- `2,008` → pacote acumulado de ajustes publicados após o lançamento da linha 2
+- `2,013` → pacote acumulado de ajustes publicados após o lançamento da linha 2
 
 > Convenção adotada neste projeto: a parte fracionária representa o acumulado de implementações/correções relevantes publicadas após a base principal. A linha `2.x` inaugura um novo repositório de evolução separada.
 
@@ -223,7 +223,7 @@ O projeto adota um versionamento incremental a partir da publicação pública i
 
 ## Histórico de versões
 
-### Versão 2.008 — pacote acumulado de 8 evoluções da linha 2
+### Versão 2.013 — pacote acumulado de 13 evoluções da linha 2
 
 1. Atualização editorial do `README` da linha avançada `2.x`.
 2. Destaque visual da linha avançada e link para a linha estável `1.x`.
@@ -233,6 +233,11 @@ O projeto adota um versionamento incremental a partir da publicação pública i
 6. Correção de acentuação em textos do `README` e da ajuda interna.
 7. Substituição de valores técnicos por rótulos amigáveis nos dropdowns de `Ocorrências`.
 8. Ajuste visual da grade de cursistas com destaque para `sim/não` e melhor distribuição automática das colunas.
+9. Normalização de `Participantes` para `0` em encontros sem cursistas ou deixados em branco, com preenchimento automático na interface.
+10. Aviso de divergência entre `mês de referência` e `data de envio` no salvamento de socializações.
+11. Ajuste do rótulo `Resolução` para `Data de resolução` na aba de ocorrências.
+12. Equalização dos painéis esquerdo e direito na aba `Ocorrências`, dividindo a largura disponível em proporções iguais.
+13. Fixação efetiva do divisor 50/50 na aba `Ocorrências`, posicionando o `Panedwindow` no centro da área útil.
 
 ### Versão 2.000 — início da linha 2
 
