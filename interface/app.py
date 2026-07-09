@@ -842,17 +842,17 @@ class MultiplicaApp(tk.Tk):
         line_frame.pack(fill="x", pady=(0, 10))
         ttk.Label(
             line_frame,
-            text="Esta instalaÃ§Ã£o corresponde Ã  Linha 2 (ediÃ§Ã£o avanÃ§ada).",
+            text="Esta instalação corresponde à Linha 2 (edição avançada).",
             font=("Segoe UI", 10, "bold"),
             justify="left",
         ).pack(anchor="w")
         ttk.Label(
             line_frame,
             text=(
-                "Linha estÃ¡vel 1.x: versÃ£o mais simples, indicada para uso mais direto no dia a dia.\n"
-                "Linha avanÃ§ada 2.x: versÃ£o com acompanhamento de cursistas, importaÃ§Ã£o, anexos, "
-                "movimentaÃ§Ãµes e ajuda integrada.\n"
-                "Os materiais de apoio desta instalaÃ§Ã£o foram preparados para a Linha 2."
+                "Linha estável 1.x: versão mais simples, indicada para uso mais direto no dia a dia.\n"
+                "Linha avançada 2.x: versão com acompanhamento de cursistas, importação, anexos, "
+                "movimentações e ajuda integrada.\n"
+                "Os materiais de apoio desta instalação foram preparados para a Linha 2."
             ),
             justify="left",
         ).pack(anchor="w", pady=(6, 0))
@@ -911,12 +911,12 @@ class MultiplicaApp(tk.Tk):
                 ),
             ).grid(row=0, column=column, padx=(0, 8), pady=2, sticky="w")
 
-        help_frame = ttk.LabelFrame(self.home_tab, text="Ajuda e documentaÃ§Ã£o", padding=10)
+        help_frame = ttk.LabelFrame(self.home_tab, text="Ajuda e documentação", padding=10)
         help_frame.pack(fill="x", pady=(10, 0))
         ttk.Label(
             help_frame,
             text=(
-                "Se preferir, consulte o guia rÃ¡pido, o manual completo ou a versÃ£o editorial "
+                "Se preferir, consulte o guia rápido, o manual completo ou a versão editorial "
                 "do manual diretamente por esta tela."
             ),
             justify="left",
@@ -925,7 +925,7 @@ class MultiplicaApp(tk.Tk):
         help_buttons = ttk.Frame(help_frame)
         help_buttons.pack(fill="x")
         ttk.Button(help_buttons, text="Abrir ajuda", command=self.show_help_dialog).pack(side="left")
-        ttk.Button(help_buttons, text="Guia rÃ¡pido", command=self.open_quick_guide).pack(
+        ttk.Button(help_buttons, text="Guia rápido", command=self.open_quick_guide).pack(
             side="left", padx=(8, 0)
         )
         ttk.Button(help_buttons, text="Manual completo", command=self.open_user_manual).pack(
@@ -4398,18 +4398,18 @@ class MultiplicaApp(tk.Tk):
 
         ttk.Label(
             container,
-            text="Ajuda e manual do usuÃ¡rio",
+            text="Ajuda e manual do usuário",
             font=("Segoe UI", 15, "bold"),
         ).pack(anchor="w")
         ttk.Label(
             container,
-            text="Consulte o guia rÃ¡pido, o manual completo e a versÃ£o editorial do manual.",
+            text="Consulte o guia rápido, o manual completo e a versão editorial do manual.",
             font=("Segoe UI", 10),
         ).pack(anchor="w", pady=(4, 12))
 
         actions = ttk.Frame(container)
         actions.pack(fill="x", pady=(0, 12))
-        ttk.Button(actions, text="Abrir guia rÃ¡pido", command=self.open_quick_guide).pack(side="left")
+        ttk.Button(actions, text="Abrir guia rápido", command=self.open_quick_guide).pack(side="left")
         ttk.Button(actions, text="Abrir manual completo", command=self.open_user_manual).pack(
             side="left", padx=(8, 0)
         )
@@ -4450,10 +4450,10 @@ class MultiplicaApp(tk.Tk):
         dialog.focus_set()
 
     def open_quick_guide(self) -> None:
-        self._open_document(GUIA_RAPIDO_PATH, "Guia rÃ¡pido")
+        self._open_document(GUIA_RAPIDO_PATH, "Guia rápido")
 
     def open_user_manual(self) -> None:
-        self._open_document(MANUAL_USUARIO_PATH, "Manual do usuÃ¡rio")
+        self._open_document(MANUAL_USUARIO_PATH, "Manual do usuário")
 
     def open_editorial_manual(self) -> None:
         self._open_document(MANUAL_EDITORIAL_PATH, "Manual editorial")
@@ -4468,15 +4468,15 @@ class MultiplicaApp(tk.Tk):
             except OSError:
                 pass
         return (
-            "Ajuda indisponÃ­vel no momento.\n\n"
+            "Ajuda indisponível no momento.\n\n"
             "Abra a pasta docs para consultar os arquivos de apoio."
         )
 
     def _open_document(self, path: Path, document_name: str) -> None:
         if not path.exists():
             messagebox.showwarning(
-                "Arquivo nÃ£o encontrado",
-                f"O arquivo de {document_name.lower()} nÃ£o foi localizado em:\n{path}",
+                "Arquivo não encontrado",
+                f"O arquivo de {document_name.lower()} não foi localizado em:\n{path}",
             )
             return
         self._open_path(path)

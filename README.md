@@ -44,14 +44,14 @@ O projeto foi criado para reduzir retrabalho no registro mensal de encontros ped
 
 > **Importante:** este projeto é uma ferramenta **experimental, independente e não oficial**, desenvolvida para apoio a **encontros pedagógicos**. Pode ser utilizada em diferentes contextos, **como por exemplo o Programa Multiplica**, sem qualquer afirmação de oficialidade, homologação ou vínculo institucional automático.
 
-## DocumentaÃ§Ã£o do usuÃ¡rio
+## Documentação do usuário
 
-- Guia rÃ¡pido: `docs/guia_rapido.md`
+- Guia rápido: `docs/guia_rapido.md`
 - Manual completo: `docs/manual_usuario.md`
 - Texto resumido para ajuda interna: `docs/ajuda_resumida.md`
-- Manual em versÃ£o editorial: `docs/manual_usuario_editorial.md`
+- Manual em versão editorial: `docs/manual_usuario_editorial.md`
 
-Na interface, a documentaÃ§Ã£o tambÃ©m pode ser acessada pelo botÃ£o `Ajuda`.
+Na interface, a documentação também pode ser acessada pelo botão `Ajuda`.
 
 ## Principais recursos
 
