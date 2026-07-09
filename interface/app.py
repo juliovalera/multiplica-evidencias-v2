@@ -373,9 +373,15 @@ class MultiplicaApp(tk.Tk):
         self.acompanhamento_cursista_var = tk.StringVar()
         self.acompanhamento_turma_var = tk.StringVar()
         self.acompanhamento_encontro_var = tk.StringVar()
-        self.acompanhamento_categoria_var = tk.StringVar(value=ACOMPANHAMENTO_CATEGORIAS[0])
-        self.acompanhamento_status_var = tk.StringVar(value=ACOMPANHAMENTO_STATUS_OPTIONS[0])
-        self.acompanhamento_prioridade_var = tk.StringVar(value=PRIORIDADE_OPTIONS[1])
+        self.acompanhamento_categoria_var = tk.StringVar(
+            value=self._display_label(ACOMPANHAMENTO_CATEGORIAS[0])
+        )
+        self.acompanhamento_status_var = tk.StringVar(
+            value=self._display_label(ACOMPANHAMENTO_STATUS_OPTIONS[0])
+        )
+        self.acompanhamento_prioridade_var = tk.StringVar(
+            value=self._display_label(PRIORIDADE_OPTIONS[1])
+        )
         self.acompanhamento_resumo_var = tk.StringVar()
         self.acompanhamento_data_abertura_var = tk.StringVar(value=today.strftime("%d/%m/%Y"))
         self.acompanhamento_data_resolucao_var = tk.StringVar()
@@ -1682,7 +1688,7 @@ class MultiplicaApp(tk.Tk):
         ttk.Combobox(
             form,
             textvariable=self.acompanhamento_categoria_var,
-            values=ACOMPANHAMENTO_CATEGORIAS,
+            values=self._display_options(ACOMPANHAMENTO_CATEGORIAS),
             state="readonly",
             width=22,
         ).grid(row=2, column=1, sticky="w", padx=(10, 16), pady=4)
@@ -1690,7 +1696,7 @@ class MultiplicaApp(tk.Tk):
         ttk.Combobox(
             form,
             textvariable=self.acompanhamento_status_var,
-            values=ACOMPANHAMENTO_STATUS_OPTIONS,
+            values=self._display_options(ACOMPANHAMENTO_STATUS_OPTIONS),
             state="readonly",
             width=20,
         ).grid(row=2, column=3, sticky="w", padx=(10, 0), pady=4)
@@ -1698,7 +1704,7 @@ class MultiplicaApp(tk.Tk):
         ttk.Combobox(
             form,
             textvariable=self.acompanhamento_prioridade_var,
-            values=PRIORIDADE_OPTIONS,
+            values=self._display_options(PRIORIDADE_OPTIONS),
             state="readonly",
             width=12,
         ).grid(row=3, column=1, sticky="w", padx=(10, 16), pady=4)
@@ -2958,9 +2964,9 @@ class MultiplicaApp(tk.Tk):
         self.acompanhamento_cursista_var.set("")
         self.acompanhamento_turma_var.set("")
         self.acompanhamento_encontro_var.set("")
-        self.acompanhamento_categoria_var.set(ACOMPANHAMENTO_CATEGORIAS[0])
-        self.acompanhamento_status_var.set(ACOMPANHAMENTO_STATUS_OPTIONS[0])
-        self.acompanhamento_prioridade_var.set(PRIORIDADE_OPTIONS[1])
+        self.acompanhamento_categoria_var.set(self._display_label(ACOMPANHAMENTO_CATEGORIAS[0]))
+        self.acompanhamento_status_var.set(self._display_label(ACOMPANHAMENTO_STATUS_OPTIONS[0]))
+        self.acompanhamento_prioridade_var.set(self._display_label(PRIORIDADE_OPTIONS[1]))
         self.acompanhamento_resumo_var.set("")
         self.acompanhamento_data_abertura_var.set(datetime.today().strftime("%d/%m/%Y"))
         self.acompanhamento_data_resolucao_var.set("")
@@ -3006,7 +3012,15 @@ class MultiplicaApp(tk.Tk):
             return None
 
         turma_label = self.acompanhamento_turma_var.get().strip()
-        status = self.acompanhamento_status_var.get().strip() or ACOMPANHAMENTO_STATUS_OPTIONS[0]
+        categoria = self._internal_value_from_label(
+            self.acompanhamento_categoria_var.get().strip()
+        ) or ACOMPANHAMENTO_CATEGORIAS[0]
+        status = self._internal_value_from_label(
+            self.acompanhamento_status_var.get().strip()
+        ) or ACOMPANHAMENTO_STATUS_OPTIONS[0]
+        prioridade = self._internal_value_from_label(
+            self.acompanhamento_prioridade_var.get().strip()
+        ) or PRIORIDADE_OPTIONS[1]
         data_resolucao = self.acompanhamento_data_resolucao_var.get().strip()
         if status == "resolvido" and not data_resolucao:
             data_resolucao = datetime.today().strftime("%d/%m/%Y")
@@ -3019,9 +3033,9 @@ class MultiplicaApp(tk.Tk):
                 "encontro_id": self.acompanhamento_encontro_label_to_id.get(
                     self.acompanhamento_encontro_var.get().strip()
                 ),
-                "categoria": self.acompanhamento_categoria_var.get().strip(),
+                "categoria": categoria,
                 "status": status,
-                "prioridade": self.acompanhamento_prioridade_var.get().strip(),
+                "prioridade": prioridade,
                 "resumo": resumo,
                 "descricao": self.acompanhamento_descricao_text.get("1.0", "end").strip(),
                 "encaminhar_pec": self.acompanhamento_encaminhar_pec_var.get(),
@@ -3119,9 +3133,9 @@ class MultiplicaApp(tk.Tk):
             self.acompanhamento_encontro_var.set(self._format_encontro_label(encontro_row))
         else:
             self.acompanhamento_encontro_var.set("")
-        self.acompanhamento_categoria_var.set(row["categoria"])
-        self.acompanhamento_status_var.set(row["status"])
-        self.acompanhamento_prioridade_var.set(row["prioridade"])
+        self.acompanhamento_categoria_var.set(self._display_label(str(row["categoria"] or "")))
+        self.acompanhamento_status_var.set(self._display_label(str(row["status"] or "")))
+        self.acompanhamento_prioridade_var.set(self._display_label(str(row["prioridade"] or "")))
         self.acompanhamento_resumo_var.set(row["resumo"])
         self.acompanhamento_data_abertura_var.set(
             self._format_date_for_display(str(row["data_abertura"]), full_year=True)
