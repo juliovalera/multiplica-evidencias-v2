@@ -12,6 +12,46 @@ STATUS_OPTIONS = [
 
 TURMA_STATUS_OPTIONS = ["ativa", "inativa"]
 
+BUSCA_ATIVA_STATUS_OPTIONS = [
+    "nao_iniciado",
+    "em_contato",
+    "aguardando_retorno",
+    "localizado",
+    "encerrado",
+]
+
+ACOMPANHAMENTO_CATEGORIAS = [
+    "curso_errado",
+    "turma_errada",
+    "consta_em_outra_turma",
+    "nao_aparece_na_lista",
+    "acesso",
+    "teams",
+    "inscricao",
+    "busca_ativa",
+    "duvida_pedagogica",
+    "outro",
+]
+
+ACOMPANHAMENTO_STATUS_OPTIONS = [
+    "aberto",
+    "em_acompanhamento",
+    "aguardando_retorno",
+    "encaminhado_pec",
+    "resolvido",
+    "arquivado",
+]
+
+PRIORIDADE_OPTIONS = ["baixa", "normal", "alta"]
+
+SOCIALIZACAO_STATUS_OPTIONS = [
+    "nao_enviada",
+    "enviada",
+    "em_analise",
+    "devolutiva_registrada",
+    "destaque",
+]
+
 WEEKDAY_OPTIONS = [
     "",
     "SEG",

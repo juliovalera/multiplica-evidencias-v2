@@ -10,11 +10,31 @@ import subprocess
 import sys
 import threading
 import tkinter as tk
+import unicodedata
 from tkinter import filedialog, messagebox, ttk
 
-from config import APP_NAME, APP_VERSION, BACKUP_DIR, EVIDENCIAS_DIR, SAIDAS_DIR, slugify
+from config import (
+    ACOMPANHAMENTOS_DIR,
+    APP_NAME,
+    APP_VERSION,
+    BACKUP_DIR,
+    EVIDENCIAS_DIR,
+    SAIDAS_DIR,
+    SOCIALIZACOES_DIR,
+    slugify,
+)
 from database import Database
-from models import AUTO_OBSERVATIONS, STATUS_OPTIONS, TURMA_STATUS_OPTIONS, WEEKDAY_OPTIONS
+from models import (
+    ACOMPANHAMENTO_CATEGORIAS,
+    ACOMPANHAMENTO_STATUS_OPTIONS,
+    AUTO_OBSERVATIONS,
+    BUSCA_ATIVA_STATUS_OPTIONS,
+    PRIORIDADE_OPTIONS,
+    SOCIALIZACAO_STATUS_OPTIONS,
+    STATUS_OPTIONS,
+    TURMA_STATUS_OPTIONS,
+    WEEKDAY_OPTIONS,
+)
 from relatorio import export_pdf, generate_docx, generate_financial_statement_docx
 
 
@@ -221,6 +241,44 @@ class MultiplicaApp(tk.Tk):
     TERMS_VERSION = "2026-07-06"
     TERMS_CONFIG_KEY = "terms_accepted_version"
     TERMS_ACCEPTED_AT_KEY = "terms_accepted_at"
+    DISPLAY_LABELS = {
+        "": "Todos",
+        "abertas": "Abertas",
+        "ativos": "Ativos",
+        "todos": "Todos",
+        "nao_iniciado": "Não iniciado",
+        "em_contato": "Em contato",
+        "aguardando_retorno": "Aguardando retorno",
+        "localizado": "Localizado",
+        "encerrado": "Encerrado",
+        "curso_errado": "Curso errado",
+        "turma_errada": "Turma errada",
+        "consta_em_outra_turma": "Consta em outra turma",
+        "nao_aparece_na_lista": "Não aparece na lista",
+        "acesso": "Problema de acesso",
+        "teams": "Problema no Teams",
+        "inscricao": "Inscrição inconsistente",
+        "busca_ativa": "Busca ativa",
+        "duvida_pedagogica": "Dúvida pedagógica",
+        "outro": "Outro",
+        "aberto": "Aberto",
+        "em_acompanhamento": "Em acompanhamento",
+        "encaminhado_pec": "Encaminhado ao PEC",
+        "resolvido": "Resolvido",
+        "arquivado": "Arquivado",
+        "baixa": "Baixa",
+        "normal": "Normal",
+        "alta": "Alta",
+        "nao_enviada": "Não enviada",
+        "enviada": "Enviada",
+        "em_analise": "Em análise",
+        "devolutiva_registrada": "Devolutiva registrada",
+        "destaque": "Destaque",
+        "com_anexos": "Com anexos",
+        "sem_anexos": "Sem anexos",
+        "com_movimentacoes": "Com movimentações",
+        "sem_movimentacoes": "Sem movimentações",
+    }
 
     def __init__(self, database: Database) -> None:
         super().__init__()
@@ -233,16 +291,31 @@ class MultiplicaApp(tk.Tk):
         self.selected_turma_id: int | None = None
         self.selected_encontro_id: int | None = None
         self.selected_evidence_id: int | None = None
+        self.selected_cursista_id: int | None = None
+        self.selected_acompanhamento_id: int | None = None
+        self.selected_socializacao_id: int | None = None
+        self.selected_acompanhamento_movimentacao_id: int | None = None
+        self.selected_acompanhamento_anexo_id: int | None = None
+        self.selected_socializacao_movimentacao_id: int | None = None
+        self.selected_socializacao_anexo_id: int | None = None
         self.preview_photo = None
         self.preview_image_path: Path | None = None
         self.report_generation_in_progress = False
 
         self.month_label_to_id: dict[str, int] = {}
         self.turma_label_to_id: dict[str, int] = {}
+        self.cursista_label_to_id: dict[str, int] = {}
+        self.acompanhamento_encontro_label_to_id: dict[str, int] = {}
+        self.socializacao_rows_by_item_id: dict[str, dict[str, object]] = {}
+        self.acompanhamento_movimentacoes_rows: list[sqlite3.Row] = []
+        self.acompanhamento_attachment_rows: dict[int, sqlite3.Row] = {}
+        self.socializacao_movimentacoes_rows: list[sqlite3.Row] = []
+        self.socializacao_attachment_rows: dict[int, sqlite3.Row] = {}
         self.auto_observacao_names = list(AUTO_OBSERVATIONS.keys())
         self._formatting_locks: set[str] = set()
         self._formatted_entries: dict[str, tuple[tk.Entry, object]] = {}
         self._tree_column_configs: dict[ttk.Treeview, dict[str, object]] = {}
+        self._active_scroll_canvas: tk.Canvas | None = None
 
         self._build_variables()
         self._setup_auto_formatters()
@@ -278,6 +351,55 @@ class MultiplicaApp(tk.Tk):
         self.encontro_duracao_var = tk.StringVar()
         self.encontro_status_var = tk.StringVar(value=STATUS_OPTIONS[0])
         self.auto_observacao_var = tk.StringVar(value=self.auto_observacao_names[0])
+
+        self.cursista_nome_var = tk.StringVar()
+        self.cursista_turma_var = tk.StringVar()
+        self.cursista_email_institucional_var = tk.StringVar()
+        self.cursista_email_pessoal_var = tk.StringVar()
+        self.cursista_telefone_var = tk.StringVar()
+        self.cursista_status_busca_ativa_var = tk.StringVar(
+            value=self.DISPLAY_LABELS[BUSCA_ATIVA_STATUS_OPTIONS[0]]
+        )
+        self.cursista_ativo_var = tk.BooleanVar(value=True)
+        self.cursista_filter_nome_var = tk.StringVar()
+        self.cursista_filter_turma_var = tk.StringVar()
+        self.cursista_filter_ativo_var = tk.StringVar(value="ativos")
+        self.cursista_filter_busca_var = tk.StringVar()
+
+        self.acompanhamento_cursista_var = tk.StringVar()
+        self.acompanhamento_turma_var = tk.StringVar()
+        self.acompanhamento_encontro_var = tk.StringVar()
+        self.acompanhamento_categoria_var = tk.StringVar(value=ACOMPANHAMENTO_CATEGORIAS[0])
+        self.acompanhamento_status_var = tk.StringVar(value=ACOMPANHAMENTO_STATUS_OPTIONS[0])
+        self.acompanhamento_prioridade_var = tk.StringVar(value=PRIORIDADE_OPTIONS[1])
+        self.acompanhamento_resumo_var = tk.StringVar()
+        self.acompanhamento_data_abertura_var = tk.StringVar(value=today.strftime("%d/%m/%Y"))
+        self.acompanhamento_data_resolucao_var = tk.StringVar()
+        self.acompanhamento_encaminhar_pec_var = tk.BooleanVar(value=False)
+        self.acompanhamento_filter_status_var = tk.StringVar(value=self.DISPLAY_LABELS["abertas"])
+        self.acompanhamento_filter_turma_var = tk.StringVar()
+        self.acompanhamento_filter_categoria_var = tk.StringVar()
+        self.acompanhamento_filter_search_var = tk.StringVar()
+        self.acompanhamento_filter_anexos_var = tk.StringVar()
+        self.acompanhamento_filter_movimentacoes_var = tk.StringVar()
+        self.acompanhamento_movimentacao_data_var = tk.StringVar(value=today.strftime("%d/%m/%Y"))
+
+        self.socializacao_cursista_var = tk.StringVar()
+        self.socializacao_turma_var = tk.StringVar()
+        self.socializacao_mes_var = tk.StringVar(value=str(today.month))
+        self.socializacao_ano_var = tk.StringVar(value=str(today.year))
+        self.socializacao_status_var = tk.StringVar(
+            value=self.DISPLAY_LABELS[SOCIALIZACAO_STATUS_OPTIONS[0]]
+        )
+        self.socializacao_data_envio_var = tk.StringVar()
+        self.socializacao_necessita_apoio_var = tk.BooleanVar(value=False)
+        self.socializacao_destaque_var = tk.BooleanVar(value=False)
+        self.socializacao_filter_turma_var = tk.StringVar()
+        self.socializacao_filter_status_var = tk.StringVar()
+        self.socializacao_filter_search_var = tk.StringVar()
+        self.socializacao_filter_anexos_var = tk.StringVar()
+        self.socializacao_filter_movimentacoes_var = tk.StringVar()
+        self.socializacao_movimentacao_data_var = tk.StringVar(value=today.strftime("%d/%m/%Y"))
 
         self.status_bar_var = tk.StringVar(
             value="Tudo permanece local: banco SQLite, imagens e relatórios."
@@ -339,6 +461,49 @@ class MultiplicaApp(tk.Tk):
 
     def _ttk_background(self, style_name: str = "TFrame") -> str:
         return self.style.lookup(style_name, "background") or "#f0f0f0"
+
+    def _register_scroll_canvas(self, canvas: tk.Canvas, root_widget: tk.Misc) -> None:
+        if not getattr(self, "_mousewheel_bound", False):
+            self.bind_all("<MouseWheel>", self._handle_active_canvas_mousewheel, add="+")
+            self.bind_all("<Button-4>", self._handle_active_canvas_mousewheel_linux, add="+")
+            self.bind_all("<Button-5>", self._handle_active_canvas_mousewheel_linux, add="+")
+            self._mousewheel_bound = True
+
+        def _activate(_event=None) -> None:
+            self._active_scroll_canvas = canvas
+
+        def _deactivate(_event=None) -> None:
+            if self._active_scroll_canvas is canvas:
+                self._active_scroll_canvas = None
+
+        widgets = [root_widget]
+        widgets.extend(root_widget.winfo_children())
+        while widgets:
+            widget = widgets.pop()
+            widget.bind("<Enter>", _activate, add="+")
+            widget.bind("<Leave>", _deactivate, add="+")
+            widgets.extend(widget.winfo_children())
+
+    def _handle_active_canvas_mousewheel(self, event) -> None:
+        canvas = self._active_scroll_canvas
+        if canvas is None:
+            return
+        delta = getattr(event, "delta", 0)
+        if delta == 0:
+            return
+        if bool(event.state & 0x0001):
+            canvas.xview_scroll(int(-delta / 120), "units")
+            return
+        canvas.yview_scroll(int(-delta / 120), "units")
+
+    def _handle_active_canvas_mousewheel_linux(self, event) -> None:
+        canvas = self._active_scroll_canvas
+        if canvas is None:
+            return
+        if getattr(event, "num", None) == 4:
+            canvas.yview_scroll(-1, "units")
+        elif getattr(event, "num", None) == 5:
+            canvas.yview_scroll(1, "units")
 
     def _register_formatted_entry(self, entry: tk.Entry, formatter) -> None:
         widget_name = str(entry)
@@ -465,6 +630,37 @@ class MultiplicaApp(tk.Tk):
         self.valor_formacao_semanal_var.set(self._format_currency_from_cents(cents))
         return True
 
+    def _confirm_month_rate_update(self, month_id: int) -> bool | None:
+        month = self.database.get_month(month_id)
+        if not month:
+            return True
+
+        current_rate_cents = int(month["weekly_rate_cents"] or 0)
+        informed_rate_cents = self._parse_currency_to_cents(self.valor_formacao_semanal_var.get())
+        if current_rate_cents == informed_rate_cents:
+            return True
+
+        month_label = str(month["ref_label"] or f"{int(month['ref_month']):02d}/{int(month['ref_year'])}")
+        saved_label = self._format_currency_from_cents(current_rate_cents)
+        informed_label = self._format_currency_from_cents(informed_rate_cents)
+        answer = messagebox.askyesnocancel(
+            "Divergência no valor da formação semanal",
+            (
+                f"Mês de referência: {month_label}\n\n"
+                f"Valor salvo neste mês: {saved_label}\n"
+                f"Valor informado agora: {informed_label}\n\n"
+                "Sim = atualizar o valor deste mês\n"
+                "Não = manter o valor já salvo neste mês\n"
+                "Cancelar = interromper a operação"
+            ),
+        )
+        if answer is None:
+            return None
+        if answer is False:
+            self.valor_formacao_semanal_var.set(saved_label)
+            return False
+        return True
+
     def _resolve_display_date(self, value: str) -> datetime:
         cleaned = value.strip()
         if not cleaned:
@@ -550,18 +746,21 @@ class MultiplicaApp(tk.Tk):
         self.turmas_tab = ttk.Frame(self.notebook, padding=10)
         self.encontros_tab = ttk.Frame(self.notebook, padding=10)
         self.checklist_tab = ttk.Frame(self.notebook, padding=10)
+        self.acompanhamento_tab = ttk.Frame(self.notebook, padding=10)
 
         self.notebook.add(self.home_tab, text="Início")
         self.notebook.add(self.professor_tab, text="Professor Multiplicador")
         self.notebook.add(self.turmas_tab, text="Turmas")
         self.notebook.add(self.encontros_tab, text="Encontros")
         self.notebook.add(self.checklist_tab, text="Checklist e relatório")
+        self.notebook.add(self.acompanhamento_tab, text="Acompanhamento de Cursistas")
 
         self._build_home_tab()
         self._build_professor_tab()
         self._build_turmas_tab()
         self._build_encontros_tab()
         self._build_checklist_tab()
+        self._build_acompanhamento_tab()
 
         status_bar = ttk.Label(
             self,
@@ -1101,12 +1300,817 @@ class MultiplicaApp(tk.Tk):
         )
         self.report_progress_label.pack(anchor="w", pady=(6, 0))
 
+    def _build_acompanhamento_tab(self) -> None:
+        dashboard = ttk.LabelFrame(
+            self.acompanhamento_tab,
+            text="Resumo do acompanhamento",
+            padding=10,
+        )
+        dashboard.pack(fill="x")
+        self.cursistas_dashboard_labels: dict[str, ttk.Label] = {}
+        dashboard_rows = [
+            ("cursistas_ativos", "Cursistas ativos"),
+            ("busca_ativa_pendente", "Busca ativa pendente"),
+            ("acompanhamentos_abertos", "Ocorrências abertas"),
+            ("socializacoes_nao_enviadas", "Socializações não enviadas"),
+            ("socializacoes_destaque", "Potenciais destaques"),
+        ]
+        for index, (key, label_text) in enumerate(dashboard_rows):
+            column = index * 2
+            ttk.Label(dashboard, text=label_text).grid(
+                row=0,
+                column=column,
+                sticky="w",
+                padx=(0 if index == 0 else 18, 8),
+                pady=2,
+            )
+            label = ttk.Label(dashboard, text="-")
+            label.grid(row=0, column=column + 1, sticky="w", pady=2)
+            self.cursistas_dashboard_labels[key] = label
+        for column in range(len(dashboard_rows) * 2):
+            dashboard.columnconfigure(column, weight=1 if column % 2 == 0 else 0)
+
+        self.acompanhamento_notebook = ttk.Notebook(
+            self.acompanhamento_tab,
+            style="Multiplica.TNotebook",
+        )
+        self.acompanhamento_notebook.pack(fill="both", expand=True, pady=(10, 0))
+
+        self.cursistas_subtab = ttk.Frame(self.acompanhamento_notebook, padding=10)
+        self.ocorrencias_subtab = ttk.Frame(self.acompanhamento_notebook, padding=10)
+        self.socializacoes_subtab = ttk.Frame(self.acompanhamento_notebook, padding=10)
+
+        self.acompanhamento_notebook.add(self.cursistas_subtab, text="Cursistas")
+        self.acompanhamento_notebook.add(self.ocorrencias_subtab, text="Ocorrências")
+        self.acompanhamento_notebook.add(self.socializacoes_subtab, text="Socializações")
+
+        self._build_cursistas_subtab()
+        self._build_ocorrencias_subtab()
+        self._build_socializacoes_subtab()
+
+    def _build_cursistas_subtab(self) -> None:
+        filter_frame = ttk.LabelFrame(self.cursistas_subtab, text="Filtros", padding=10)
+        filter_frame.pack(fill="x")
+        ttk.Label(filter_frame, text="Nome").grid(row=0, column=0, sticky="w", pady=4)
+        ttk.Entry(filter_frame, textvariable=self.cursista_filter_nome_var, width=28).grid(
+            row=0, column=1, sticky="w", padx=(8, 16), pady=4
+        )
+        ttk.Label(filter_frame, text="Turma").grid(row=0, column=2, sticky="w", pady=4)
+        self.cursista_filter_turma_combo = ttk.Combobox(
+            filter_frame,
+            textvariable=self.cursista_filter_turma_var,
+            state="readonly",
+            width=18,
+        )
+        self.cursista_filter_turma_combo.grid(row=0, column=3, sticky="w", padx=(8, 16), pady=4)
+        ttk.Label(filter_frame, text="Busca ativa").grid(row=0, column=4, sticky="w", pady=4)
+        self.cursista_filter_busca_combo = ttk.Combobox(
+            filter_frame,
+            textvariable=self.cursista_filter_busca_var,
+            state="readonly",
+            width=20,
+            values=self._display_options([""] + BUSCA_ATIVA_STATUS_OPTIONS),
+        )
+        self.cursista_filter_busca_combo.grid(row=0, column=5, sticky="w", padx=(8, 16), pady=4)
+        ttk.Label(filter_frame, text="Situação").grid(row=0, column=6, sticky="w", pady=4)
+        self.cursista_filter_ativo_combo = ttk.Combobox(
+            filter_frame,
+            textvariable=self.cursista_filter_ativo_var,
+            state="readonly",
+            width=12,
+            values=["ativos", "todos"],
+        )
+        self.cursista_filter_ativo_combo.grid(row=0, column=7, sticky="w", padx=(8, 16), pady=4)
+        ttk.Button(filter_frame, text="Atualizar", command=self.refresh_cursista_tree).grid(
+            row=0, column=8, sticky="w", pady=4
+        )
+        ttk.Button(
+            filter_frame,
+            text="Analisar planilha",
+            command=self.preview_cursista_import_file,
+        ).grid(row=0, column=9, sticky="w", pady=4)
+
+        content = ttk.Panedwindow(self.cursistas_subtab, orient="horizontal")
+        content.pack(fill="both", expand=True, pady=(10, 0))
+
+        left = ttk.Frame(content)
+        right = ttk.Frame(content)
+        content.add(left, weight=2)
+        content.add(right, weight=3)
+
+        form = ttk.LabelFrame(left, text="Cadastro de cursista", padding=10)
+        form.pack(fill="both", expand=True)
+
+        ttk.Label(form, text="Nome").grid(row=0, column=0, sticky="w", pady=4)
+        ttk.Entry(form, textvariable=self.cursista_nome_var, width=34).grid(
+            row=0, column=1, columnspan=3, sticky="ew", padx=(10, 0), pady=4
+        )
+        ttk.Label(form, text="Turma").grid(row=1, column=0, sticky="w", pady=4)
+        self.cursista_turma_combo = ttk.Combobox(
+            form,
+            textvariable=self.cursista_turma_var,
+            state="readonly",
+            width=24,
+        )
+        self.cursista_turma_combo.grid(row=1, column=1, sticky="w", padx=(10, 16), pady=4)
+        ttk.Label(form, text="Busca ativa").grid(row=1, column=2, sticky="w", pady=4)
+        ttk.Combobox(
+            form,
+            textvariable=self.cursista_status_busca_ativa_var,
+            values=self._display_options(BUSCA_ATIVA_STATUS_OPTIONS),
+            state="readonly",
+            width=22,
+        ).grid(row=1, column=3, sticky="w", padx=(10, 0), pady=4)
+        ttk.Label(form, text="E-mail institucional").grid(row=2, column=0, sticky="w", pady=4)
+        ttk.Entry(form, textvariable=self.cursista_email_institucional_var, width=34).grid(
+            row=2, column=1, columnspan=3, sticky="ew", padx=(10, 0), pady=4
+        )
+        ttk.Label(form, text="E-mail pessoal").grid(row=3, column=0, sticky="w", pady=4)
+        ttk.Entry(form, textvariable=self.cursista_email_pessoal_var, width=34).grid(
+            row=3, column=1, columnspan=3, sticky="ew", padx=(10, 0), pady=4
+        )
+        ttk.Label(form, text="Telefone / WhatsApp").grid(row=4, column=0, sticky="w", pady=4)
+        ttk.Entry(form, textvariable=self.cursista_telefone_var, width=24).grid(
+            row=4, column=1, sticky="w", padx=(10, 16), pady=4
+        )
+        ttk.Checkbutton(form, text="Cursista ativo", variable=self.cursista_ativo_var).grid(
+            row=4, column=2, columnspan=2, sticky="w", pady=4
+        )
+        ttk.Label(form, text="Observação geral").grid(row=6, column=0, sticky="nw", pady=(4, 4))
+        self.cursista_observacao_text = tk.Text(form, width=44, height=5, wrap="word")
+        self.cursista_observacao_text.grid(
+            row=7, column=0, columnspan=4, sticky="nsew", pady=(0, 6)
+        )
+
+        button_row = ttk.Frame(form)
+        button_row.grid(row=5, column=0, columnspan=4, sticky="w", pady=(10, 6))
+        ttk.Button(button_row, text="Salvar cursista", command=self.save_cursista).pack(side="left")
+        ttk.Button(button_row, text="Novo cursista", command=self.clear_cursista_form).pack(
+            side="left", padx=(10, 0)
+        )
+        ttk.Button(
+            button_row,
+            text="Carregar selecionado",
+            command=self.load_selected_cursista,
+        ).pack(side="left", padx=(10, 0))
+        ttk.Button(
+            button_row,
+            text="Inativar",
+            command=self.deactivate_selected_cursista,
+        ).pack(side="left", padx=(10, 0))
+
+        form.columnconfigure(1, weight=1)
+        form.columnconfigure(3, weight=1)
+        form.rowconfigure(7, weight=1)
+
+        tree_frame = ttk.LabelFrame(right, text="Cursistas cadastrados", padding=8)
+        tree_frame.pack(fill="both", expand=True)
+        columns = ("nome", "turma", "busca", "email", "telefone", "ativo")
+        self.cursista_tree = ttk.Treeview(tree_frame, columns=columns, show="headings", height=16)
+        headers = {
+            "nome": "Nome",
+            "turma": "Turma",
+            "busca": "Busca ativa",
+            "email": "E-mail",
+            "telefone": "Telefone",
+            "ativo": "Ativo",
+        }
+        min_widths = {
+            "nome": 180,
+            "turma": 90,
+            "busca": 130,
+            "email": 180,
+            "telefone": 110,
+            "ativo": 60,
+        }
+        weights = {
+            "nome": 28,
+            "turma": 12,
+            "busca": 18,
+            "email": 24,
+            "telefone": 12,
+            "ativo": 6,
+        }
+        for column in columns:
+            self.cursista_tree.heading(column, text=headers[column])
+            self.cursista_tree.column(column, width=min_widths[column], anchor="w", stretch=True)
+        self.cursista_tree.pack(side="left", fill="both", expand=True)
+        self.cursista_tree.bind("<Double-1>", lambda _event: self.load_selected_cursista())
+        self._register_treeview_autofit(self.cursista_tree, columns, weights, min_widths)
+        scroll = ttk.Scrollbar(tree_frame, orient="vertical", command=self.cursista_tree.yview)
+        scroll.pack(side="right", fill="y")
+        self.cursista_tree.configure(yscrollcommand=scroll.set)
+
+    def _build_ocorrencias_subtab(self) -> None:
+        filter_frame = ttk.LabelFrame(self.ocorrencias_subtab, text="Filtros", padding=10)
+        filter_frame.pack(fill="x")
+        ttk.Label(filter_frame, text="Status").grid(row=0, column=0, sticky="w", pady=4)
+        self.acompanhamento_filter_status_combo = ttk.Combobox(
+            filter_frame,
+            textvariable=self.acompanhamento_filter_status_var,
+            state="readonly",
+            width=18,
+            values=self._display_options(["abertas", ""] + ACOMPANHAMENTO_STATUS_OPTIONS),
+        )
+        self.acompanhamento_filter_status_combo.grid(
+            row=0, column=1, sticky="w", padx=(8, 16), pady=4
+        )
+        ttk.Label(filter_frame, text="Turma").grid(row=0, column=2, sticky="w", pady=4)
+        self.acompanhamento_filter_turma_combo = ttk.Combobox(
+            filter_frame,
+            textvariable=self.acompanhamento_filter_turma_var,
+            state="readonly",
+            width=18,
+        )
+        self.acompanhamento_filter_turma_combo.grid(
+            row=0, column=3, sticky="w", padx=(8, 16), pady=4
+        )
+        self.acompanhamento_filter_turma_combo.bind(
+            "<<ComboboxSelected>>",
+            lambda _event: self._refresh_cursista_combo_options(),
+        )
+        ttk.Label(filter_frame, text="Categoria").grid(row=0, column=4, sticky="w", pady=4)
+        ttk.Combobox(
+            filter_frame,
+            textvariable=self.acompanhamento_filter_categoria_var,
+            values=self._display_options([""] + ACOMPANHAMENTO_CATEGORIAS),
+            state="readonly",
+            width=20,
+        ).grid(row=0, column=5, sticky="w", padx=(8, 16), pady=4)
+        ttk.Label(filter_frame, text="Busca").grid(row=0, column=6, sticky="w", pady=4)
+        ttk.Entry(filter_frame, textvariable=self.acompanhamento_filter_search_var, width=24).grid(
+            row=0, column=7, sticky="w", padx=(8, 16), pady=4
+        )
+        ttk.Label(filter_frame, text="Anexos").grid(row=1, column=0, sticky="w", pady=4)
+        ttk.Combobox(
+            filter_frame,
+            textvariable=self.acompanhamento_filter_anexos_var,
+            values=self._display_options(["", "com_anexos", "sem_anexos"]),
+            state="readonly",
+            width=18,
+        ).grid(row=1, column=1, sticky="w", padx=(8, 16), pady=4)
+        ttk.Label(filter_frame, text="Movimentações").grid(row=1, column=2, sticky="w", pady=4)
+        ttk.Combobox(
+            filter_frame,
+            textvariable=self.acompanhamento_filter_movimentacoes_var,
+            values=self._display_options(["", "com_movimentacoes", "sem_movimentacoes"]),
+            state="readonly",
+            width=18,
+        ).grid(row=1, column=3, sticky="w", padx=(8, 16), pady=4)
+        ttk.Button(
+            filter_frame,
+            text="Atualizar",
+            command=self.refresh_acompanhamento_tree,
+        ).grid(row=1, column=8, sticky="w", pady=4)
+
+        content = ttk.Panedwindow(self.ocorrencias_subtab, orient="horizontal")
+        content.pack(fill="both", expand=True, pady=(10, 0))
+        left = ttk.Frame(content)
+        right = ttk.Frame(content)
+        content.add(left, weight=2)
+        content.add(right, weight=3)
+
+        left_canvas = tk.Canvas(
+            left,
+            background=self._ttk_background(),
+            highlightthickness=0,
+        )
+        left_scrollbar = ttk.Scrollbar(left, orient="vertical", command=left_canvas.yview)
+        left_scrollbar.pack(side="right", fill="y")
+        left_canvas.pack(side="left", fill="both", expand=True)
+        left_canvas.configure(yscrollcommand=left_scrollbar.set)
+
+        left_content = ttk.Frame(left_canvas)
+        left_window = left_canvas.create_window((0, 0), window=left_content, anchor="nw")
+
+        def _update_acompanhamento_form_scroll(_event=None) -> None:
+            left_canvas.configure(scrollregion=left_canvas.bbox("all"))
+
+        def _resize_acompanhamento_form_width(event) -> None:
+            left_canvas.itemconfigure(left_window, width=event.width)
+
+        left_content.bind("<Configure>", _update_acompanhamento_form_scroll)
+        left_canvas.bind("<Configure>", _resize_acompanhamento_form_width)
+        self._register_scroll_canvas(left_canvas, left_content)
+
+        form = ttk.LabelFrame(left_content, text="Ocorrência do cursista", padding=10)
+        form.pack(fill="both", expand=True)
+        ttk.Label(form, text="Cursista").grid(row=0, column=0, sticky="w", pady=4)
+        self.acompanhamento_cursista_combo = ttk.Combobox(
+            form,
+            textvariable=self.acompanhamento_cursista_var,
+            state="readonly",
+            width=28,
+        )
+        self.acompanhamento_cursista_combo.grid(
+            row=0, column=1, columnspan=3, sticky="ew", padx=(10, 0), pady=4
+        )
+        self.acompanhamento_cursista_combo.bind(
+            "<<ComboboxSelected>>",
+            self._on_acompanhamento_cursista_selected,
+        )
+        ttk.Label(form, text="Turma").grid(row=1, column=0, sticky="w", pady=4)
+        self.acompanhamento_turma_combo = ttk.Combobox(
+            form,
+            textvariable=self.acompanhamento_turma_var,
+            state="readonly",
+            width=18,
+        )
+        self.acompanhamento_turma_combo.grid(row=1, column=1, sticky="w", padx=(10, 16), pady=4)
+        self.acompanhamento_turma_combo.bind(
+            "<<ComboboxSelected>>",
+            self._on_acompanhamento_turma_selected,
+        )
+        ttk.Label(form, text="Encontro").grid(row=1, column=2, sticky="w", pady=4)
+        self.acompanhamento_encontro_combo = ttk.Combobox(
+            form,
+            textvariable=self.acompanhamento_encontro_var,
+            state="readonly",
+            width=22,
+        )
+        self.acompanhamento_encontro_combo.grid(row=1, column=3, sticky="w", padx=(10, 0), pady=4)
+        ttk.Label(form, text="Categoria").grid(row=2, column=0, sticky="w", pady=4)
+        ttk.Combobox(
+            form,
+            textvariable=self.acompanhamento_categoria_var,
+            values=ACOMPANHAMENTO_CATEGORIAS,
+            state="readonly",
+            width=22,
+        ).grid(row=2, column=1, sticky="w", padx=(10, 16), pady=4)
+        ttk.Label(form, text="Status").grid(row=2, column=2, sticky="w", pady=4)
+        ttk.Combobox(
+            form,
+            textvariable=self.acompanhamento_status_var,
+            values=ACOMPANHAMENTO_STATUS_OPTIONS,
+            state="readonly",
+            width=20,
+        ).grid(row=2, column=3, sticky="w", padx=(10, 0), pady=4)
+        ttk.Label(form, text="Prioridade").grid(row=3, column=0, sticky="w", pady=4)
+        ttk.Combobox(
+            form,
+            textvariable=self.acompanhamento_prioridade_var,
+            values=PRIORIDADE_OPTIONS,
+            state="readonly",
+            width=12,
+        ).grid(row=3, column=1, sticky="w", padx=(10, 16), pady=4)
+        ttk.Label(form, text="Abertura").grid(row=3, column=2, sticky="w", pady=4)
+        data_abertura_entry = ttk.Entry(
+            form,
+            textvariable=self.acompanhamento_data_abertura_var,
+            width=14,
+        )
+        data_abertura_entry.grid(row=3, column=3, sticky="w", padx=(10, 0), pady=4)
+        self._register_formatted_entry(data_abertura_entry, self._format_date_live)
+        ttk.Label(form, text="Resumo").grid(row=4, column=0, sticky="w", pady=4)
+        ttk.Entry(form, textvariable=self.acompanhamento_resumo_var, width=40).grid(
+            row=4, column=1, columnspan=3, sticky="ew", padx=(10, 0), pady=4
+        )
+        ttk.Label(form, text="Resolução").grid(row=5, column=0, sticky="w", pady=4)
+        data_resolucao_entry = ttk.Entry(
+            form,
+            textvariable=self.acompanhamento_data_resolucao_var,
+            width=14,
+        )
+        data_resolucao_entry.grid(row=5, column=1, sticky="w", padx=(10, 16), pady=4)
+        self._register_formatted_entry(data_resolucao_entry, self._format_date_live)
+        ttk.Checkbutton(
+            form,
+            text="Encaminhar ao PEC",
+            variable=self.acompanhamento_encaminhar_pec_var,
+        ).grid(row=5, column=2, columnspan=2, sticky="w", pady=4)
+        ttk.Label(form, text="Descrição").grid(row=6, column=0, sticky="nw", pady=(10, 4))
+        self.acompanhamento_descricao_text = tk.Text(form, width=44, height=8, wrap="word")
+        self.acompanhamento_descricao_text.grid(
+            row=7, column=0, columnspan=4, sticky="ew", pady=(0, 8)
+        )
+        button_row = ttk.Frame(form)
+        button_row.grid(row=8, column=0, columnspan=4, sticky="w")
+        ttk.Button(
+            button_row,
+            text="Salvar ocorrência",
+            command=self.save_acompanhamento,
+        ).pack(side="left")
+        ttk.Button(
+            button_row,
+            text="Nova ocorrência",
+            command=self.clear_acompanhamento_form,
+        ).pack(side="left", padx=(10, 0))
+        ttk.Button(
+            button_row,
+            text="Carregar selecionada",
+            command=self.load_selected_acompanhamento,
+        ).pack(side="left", padx=(10, 0))
+
+        movimentacao_frame = ttk.LabelFrame(form, text="Movimentações", padding=8)
+        movimentacao_frame.grid(row=9, column=0, columnspan=4, sticky="ew", pady=(10, 0))
+        ttk.Label(movimentacao_frame, text="Data").grid(row=0, column=0, sticky="w", pady=4)
+        movimento_data_entry = ttk.Entry(
+            movimentacao_frame,
+            textvariable=self.acompanhamento_movimentacao_data_var,
+            width=14,
+        )
+        movimento_data_entry.grid(row=0, column=1, sticky="w", padx=(8, 12), pady=4)
+        self._register_formatted_entry(movimento_data_entry, self._format_date_live)
+        ttk.Button(
+            movimentacao_frame,
+            text="Adicionar movimentação",
+            command=self.add_acompanhamento_movimentacao,
+        ).grid(row=0, column=2, sticky="w", pady=4)
+        self.acompanhamento_movimentacao_text = tk.Text(
+            movimentacao_frame,
+            width=42,
+            height=3,
+            wrap="word",
+        )
+        self.acompanhamento_movimentacao_text.grid(
+            row=1,
+            column=0,
+            columnspan=3,
+            sticky="ew",
+            pady=(0, 6),
+        )
+        self.acompanhamento_movimentacoes_listbox = tk.Listbox(movimentacao_frame, height=4)
+        self.acompanhamento_movimentacoes_listbox.grid(
+            row=2,
+            column=0,
+            columnspan=3,
+            sticky="ew",
+        )
+        ttk.Button(
+            movimentacao_frame,
+            text="Remover movimentação",
+            command=self.remove_selected_acompanhamento_movimentacao,
+        ).grid(row=3, column=0, columnspan=3, sticky="w", pady=(6, 0))
+
+        anexos_frame = ttk.LabelFrame(form, text="Anexos da ocorrência", padding=8)
+        anexos_frame.grid(row=10, column=0, columnspan=4, sticky="ew", pady=(10, 0))
+        self.acompanhamento_anexos_listbox = tk.Listbox(anexos_frame, height=4)
+        self.acompanhamento_anexos_listbox.grid(row=0, column=0, columnspan=3, sticky="ew")
+        ttk.Button(
+            anexos_frame,
+            text="Adicionar arquivo",
+            command=self.add_acompanhamento_attachment,
+        ).grid(row=1, column=0, sticky="w", pady=(6, 0))
+        ttk.Button(
+            anexos_frame,
+            text="Abrir arquivo",
+            command=self.open_selected_acompanhamento_attachment,
+        ).grid(row=1, column=1, sticky="w", padx=(10, 0), pady=(6, 0))
+        ttk.Button(
+            anexos_frame,
+            text="Remover arquivo",
+            command=self.remove_selected_acompanhamento_attachment,
+        ).grid(row=1, column=2, sticky="w", padx=(10, 0), pady=(6, 0))
+        resumo_frame = ttk.LabelFrame(form, text="Resumo da ocorrência", padding=8)
+        resumo_frame.grid(row=11, column=0, columnspan=4, sticky="ew", pady=(10, 0))
+        self.acompanhamento_summary_labels: dict[str, ttk.Label] = {}
+        for row_index, (key, label_text) in enumerate(
+            [
+                ("status", "Status"),
+                ("periodo", "Abertura / resolução"),
+                ("movimentacoes", "Movimentações"),
+                ("anexos", "Anexos"),
+            ]
+        ):
+            ttk.Label(resumo_frame, text=label_text).grid(row=row_index, column=0, sticky="w", pady=2)
+            label = ttk.Label(resumo_frame, text="-")
+            label.grid(row=row_index, column=1, sticky="w", padx=(10, 0), pady=2)
+            self.acompanhamento_summary_labels[key] = label
+        form.columnconfigure(1, weight=1)
+        form.columnconfigure(3, weight=1)
+
+        tree_frame = ttk.LabelFrame(right, text="Ocorrências registradas", padding=8)
+        tree_frame.pack(fill="both", expand=True)
+        columns = ("abertura", "cursista", "turma", "categoria", "status", "prioridade")
+        self.acompanhamento_tree = ttk.Treeview(
+            tree_frame,
+            columns=columns,
+            show="headings",
+            height=16,
+        )
+        headers = {
+            "abertura": "Abertura",
+            "cursista": "Cursista",
+            "turma": "Turma",
+            "categoria": "Categoria",
+            "status": "Status",
+            "prioridade": "Prioridade",
+        }
+        min_widths = {
+            "abertura": 90,
+            "cursista": 180,
+            "turma": 80,
+            "categoria": 130,
+            "status": 120,
+            "prioridade": 90,
+        }
+        weights = {
+            "abertura": 12,
+            "cursista": 28,
+            "turma": 10,
+            "categoria": 22,
+            "status": 18,
+            "prioridade": 10,
+        }
+        for column in columns:
+            self.acompanhamento_tree.heading(column, text=headers[column])
+            self.acompanhamento_tree.column(column, width=min_widths[column], anchor="w", stretch=True)
+        self.acompanhamento_tree.pack(side="left", fill="both", expand=True)
+        self.acompanhamento_tree.tag_configure("pending", background="#fff7d6")
+        self.acompanhamento_tree.tag_configure("resolved", background="#e7f7ec")
+        self.acompanhamento_tree.tag_configure("high_priority", background="#fde2e2")
+        self.acompanhamento_tree.bind(
+            "<Double-1>",
+            lambda _event: self.load_selected_acompanhamento(),
+        )
+        self._register_treeview_autofit(self.acompanhamento_tree, columns, weights, min_widths)
+        scroll = ttk.Scrollbar(tree_frame, orient="vertical", command=self.acompanhamento_tree.yview)
+        scroll.pack(side="right", fill="y")
+        self.acompanhamento_tree.configure(yscrollcommand=scroll.set)
+
+    def _build_socializacoes_subtab(self) -> None:
+        filter_frame = ttk.LabelFrame(self.socializacoes_subtab, text="Filtros do mês", padding=10)
+        filter_frame.pack(fill="x")
+        ttk.Label(filter_frame, text="Mês").grid(row=0, column=0, sticky="w", pady=4)
+        ttk.Combobox(
+            filter_frame,
+            textvariable=self.socializacao_mes_var,
+            values=[str(item) for item in range(1, 13)],
+            state="readonly",
+            width=6,
+        ).grid(row=0, column=1, sticky="w", padx=(8, 16), pady=4)
+        ttk.Label(filter_frame, text="Ano").grid(row=0, column=2, sticky="w", pady=4)
+        ttk.Entry(filter_frame, textvariable=self.socializacao_ano_var, width=8).grid(
+            row=0, column=3, sticky="w", padx=(8, 16), pady=4
+        )
+        ttk.Label(filter_frame, text="Turma").grid(row=0, column=4, sticky="w", pady=4)
+        self.socializacao_filter_turma_combo = ttk.Combobox(
+            filter_frame,
+            textvariable=self.socializacao_filter_turma_var,
+            state="readonly",
+            width=18,
+        )
+        self.socializacao_filter_turma_combo.grid(
+            row=0, column=5, sticky="w", padx=(8, 16), pady=4
+        )
+        self.socializacao_filter_turma_combo.bind(
+            "<<ComboboxSelected>>",
+            lambda _event: self._refresh_cursista_combo_options(),
+        )
+        ttk.Label(filter_frame, text="Status").grid(row=0, column=6, sticky="w", pady=4)
+        ttk.Combobox(
+            filter_frame,
+            textvariable=self.socializacao_filter_status_var,
+            values=self._display_options([""] + SOCIALIZACAO_STATUS_OPTIONS),
+            state="readonly",
+            width=20,
+        ).grid(row=0, column=7, sticky="w", padx=(8, 16), pady=4)
+        ttk.Label(filter_frame, text="Busca").grid(row=0, column=8, sticky="w", pady=4)
+        ttk.Entry(filter_frame, textvariable=self.socializacao_filter_search_var, width=20).grid(
+            row=0, column=9, sticky="w", padx=(8, 16), pady=4
+        )
+        ttk.Label(filter_frame, text="Anexos").grid(row=1, column=0, sticky="w", pady=4)
+        ttk.Combobox(
+            filter_frame,
+            textvariable=self.socializacao_filter_anexos_var,
+            values=self._display_options(["", "com_anexos", "sem_anexos"]),
+            state="readonly",
+            width=18,
+        ).grid(row=1, column=1, sticky="w", padx=(8, 16), pady=4)
+        ttk.Label(filter_frame, text="Movimentações").grid(row=1, column=2, sticky="w", pady=4)
+        ttk.Combobox(
+            filter_frame,
+            textvariable=self.socializacao_filter_movimentacoes_var,
+            values=self._display_options(["", "com_movimentacoes", "sem_movimentacoes"]),
+            state="readonly",
+            width=18,
+        ).grid(row=1, column=3, sticky="w", padx=(8, 16), pady=4)
+        ttk.Button(
+            filter_frame,
+            text="Atualizar",
+            command=self.refresh_socializacao_tree,
+        ).grid(row=1, column=10, sticky="w", pady=4)
+
+        content = ttk.Panedwindow(self.socializacoes_subtab, orient="horizontal")
+        content.pack(fill="both", expand=True, pady=(10, 0))
+        left = ttk.Frame(content)
+        right = ttk.Frame(content)
+        content.add(left, weight=3)
+        content.add(right, weight=2)
+
+        tree_frame = ttk.LabelFrame(left, text="Socializações do mês", padding=8)
+        tree_frame.pack(fill="both", expand=True)
+        columns = ("cursista", "turma", "status", "envio", "apoio", "destaque")
+        self.socializacao_tree = ttk.Treeview(tree_frame, columns=columns, show="headings", height=11)
+        headers = {
+            "cursista": "Cursista",
+            "turma": "Turma",
+            "status": "Status",
+            "envio": "Envio",
+            "apoio": "Apoio",
+            "destaque": "Destaque",
+        }
+        min_widths = {
+            "cursista": 180,
+            "turma": 90,
+            "status": 140,
+            "envio": 90,
+            "apoio": 70,
+            "destaque": 80,
+        }
+        weights = {
+            "cursista": 32,
+            "turma": 12,
+            "status": 24,
+            "envio": 14,
+            "apoio": 9,
+            "destaque": 9,
+        }
+        for column in columns:
+            self.socializacao_tree.heading(column, text=headers[column])
+            self.socializacao_tree.column(column, width=min_widths[column], anchor="w", stretch=True)
+        self.socializacao_tree.pack(side="left", fill="both", expand=True)
+        self.socializacao_tree.tag_configure("pending", background="#fff7d6")
+        self.socializacao_tree.tag_configure("support", background="#fdecc8")
+        self.socializacao_tree.tag_configure("highlight", background="#e9f6e9")
+        self.socializacao_tree.bind("<Double-1>", lambda _event: self.load_selected_socializacao())
+        self._register_treeview_autofit(self.socializacao_tree, columns, weights, min_widths)
+        scroll = ttk.Scrollbar(tree_frame, orient="vertical", command=self.socializacao_tree.yview)
+        scroll.pack(side="right", fill="y")
+        self.socializacao_tree.configure(yscrollcommand=scroll.set)
+
+        right_canvas = tk.Canvas(
+            right,
+            background=self._ttk_background(),
+            highlightthickness=0,
+        )
+        right_scrollbar = ttk.Scrollbar(right, orient="vertical", command=right_canvas.yview)
+        right_scrollbar.pack(side="right", fill="y")
+        right_canvas.pack(side="left", fill="both", expand=True)
+        right_canvas.configure(yscrollcommand=right_scrollbar.set)
+
+        right_content = ttk.Frame(right_canvas)
+        right_window = right_canvas.create_window((0, 0), window=right_content, anchor="nw")
+
+        def _update_socializacao_form_scroll(_event=None) -> None:
+            right_canvas.configure(scrollregion=right_canvas.bbox("all"))
+
+        def _resize_socializacao_form_width(event) -> None:
+            right_canvas.itemconfigure(right_window, width=event.width)
+
+        right_content.bind("<Configure>", _update_socializacao_form_scroll)
+        right_canvas.bind("<Configure>", _resize_socializacao_form_width)
+        self._register_scroll_canvas(right_canvas, right_content)
+
+        form = ttk.LabelFrame(right_content, text="Registro da socialização", padding=10)
+        form.pack(fill="both", expand=True)
+        ttk.Label(form, text="Cursista").grid(row=0, column=0, sticky="w", pady=4)
+        self.socializacao_cursista_combo = ttk.Combobox(
+            form,
+            textvariable=self.socializacao_cursista_var,
+            state="readonly",
+            width=28,
+        )
+        self.socializacao_cursista_combo.grid(
+            row=0, column=1, sticky="ew", padx=(10, 0), pady=4
+        )
+        self.socializacao_cursista_combo.bind(
+            "<<ComboboxSelected>>",
+            self._on_socializacao_cursista_selected,
+        )
+        ttk.Label(form, text="Turma").grid(row=1, column=0, sticky="w", pady=4)
+        self.socializacao_turma_combo = ttk.Combobox(
+            form,
+            textvariable=self.socializacao_turma_var,
+            state="readonly",
+            width=22,
+        )
+        self.socializacao_turma_combo.grid(row=1, column=1, sticky="w", padx=(10, 0), pady=4)
+        self.socializacao_turma_combo.bind(
+            "<<ComboboxSelected>>",
+            self._on_socializacao_turma_selected,
+        )
+        ttk.Label(form, text="Status").grid(row=2, column=0, sticky="w", pady=4)
+        ttk.Combobox(
+            form,
+            textvariable=self.socializacao_status_var,
+            values=self._display_options(SOCIALIZACAO_STATUS_OPTIONS),
+            state="readonly",
+            width=22,
+        ).grid(row=2, column=1, sticky="w", padx=(10, 0), pady=4)
+        ttk.Label(form, text="Data de envio").grid(row=3, column=0, sticky="w", pady=4)
+        data_envio_entry = ttk.Entry(form, textvariable=self.socializacao_data_envio_var, width=14)
+        data_envio_entry.grid(row=3, column=1, sticky="w", padx=(10, 0), pady=4)
+        self._register_formatted_entry(data_envio_entry, self._format_date_live)
+        ttk.Checkbutton(
+            form,
+            text="Necessita apoio",
+            variable=self.socializacao_necessita_apoio_var,
+        ).grid(row=4, column=0, columnspan=2, sticky="w", pady=4)
+        ttk.Checkbutton(
+            form,
+            text="Potencial destaque",
+            variable=self.socializacao_destaque_var,
+        ).grid(row=5, column=0, columnspan=2, sticky="w", pady=4)
+        ttk.Label(form, text="Observação pedagógica").grid(row=7, column=0, sticky="nw", pady=(4, 4))
+        self.socializacao_observacao_text = tk.Text(form, width=34, height=4, wrap="word")
+        self.socializacao_observacao_text.grid(row=8, column=0, columnspan=2, sticky="nsew", pady=(0, 6))
+        button_row = ttk.Frame(form)
+        button_row.grid(row=6, column=0, columnspan=2, sticky="w", pady=(8, 6))
+        ttk.Button(button_row, text="Salvar socialização", command=self.save_socializacao).grid(
+            row=0, column=0, sticky="w"
+        )
+        ttk.Button(button_row, text="Nova ficha", command=self.clear_socializacao_form).grid(
+            row=0, column=1, sticky="w", padx=(10, 0)
+        )
+        ttk.Button(
+            button_row,
+            text="Carregar selecionada",
+            command=self.load_selected_socializacao,
+        ).grid(row=1, column=0, sticky="w", pady=(6, 0))
+        ttk.Button(
+            button_row,
+            text="Marcar enviada hoje",
+            command=self.mark_socializacao_sent_today,
+        ).grid(row=1, column=1, sticky="w", padx=(10, 0), pady=(6, 0))
+
+        movimentacao_frame = ttk.LabelFrame(form, text="Movimentações", padding=8)
+        movimentacao_frame.grid(row=9, column=0, columnspan=2, sticky="ew", pady=(6, 0))
+        ttk.Label(movimentacao_frame, text="Data").grid(row=0, column=0, sticky="w", pady=4)
+        socializacao_movimento_data_entry = ttk.Entry(
+            movimentacao_frame,
+            textvariable=self.socializacao_movimentacao_data_var,
+            width=14,
+        )
+        socializacao_movimento_data_entry.grid(row=0, column=1, sticky="w", padx=(8, 12), pady=4)
+        self._register_formatted_entry(socializacao_movimento_data_entry, self._format_date_live)
+        ttk.Button(
+            movimentacao_frame,
+            text="Adicionar movimentação",
+            command=self.add_socializacao_movimentacao,
+        ).grid(row=0, column=2, sticky="w", pady=4)
+        self.socializacao_movimentacao_text = tk.Text(
+            movimentacao_frame,
+            width=34,
+            height=2,
+            wrap="word",
+        )
+        self.socializacao_movimentacao_text.grid(row=1, column=0, columnspan=3, sticky="ew", pady=(0, 6))
+        self.socializacao_movimentacoes_listbox = tk.Listbox(movimentacao_frame, height=2)
+        self.socializacao_movimentacoes_listbox.grid(row=2, column=0, columnspan=3, sticky="ew")
+        ttk.Button(
+            movimentacao_frame,
+            text="Remover movimentação",
+            command=self.remove_selected_socializacao_movimentacao,
+        ).grid(row=3, column=0, columnspan=3, sticky="w", pady=(6, 0))
+
+        anexos_frame = ttk.LabelFrame(form, text="Anexos da socialização", padding=8)
+        anexos_frame.grid(row=10, column=0, columnspan=2, sticky="ew", pady=(6, 0))
+        self.socializacao_anexos_listbox = tk.Listbox(anexos_frame, height=2)
+        self.socializacao_anexos_listbox.grid(row=0, column=0, columnspan=3, sticky="ew")
+        ttk.Button(
+            anexos_frame,
+            text="Adicionar arquivo",
+            command=self.add_socializacao_attachment,
+        ).grid(row=1, column=0, sticky="w", pady=(6, 0))
+        ttk.Button(
+            anexos_frame,
+            text="Abrir arquivo",
+            command=self.open_selected_socializacao_attachment,
+        ).grid(row=1, column=1, sticky="w", padx=(10, 0), pady=(6, 0))
+        ttk.Button(
+            anexos_frame,
+            text="Remover arquivo",
+            command=self.remove_selected_socializacao_attachment,
+        ).grid(row=1, column=2, sticky="w", padx=(10, 0), pady=(6, 0))
+        resumo_frame = ttk.LabelFrame(form, text="Resumo da socialização", padding=8)
+        resumo_frame.grid(row=11, column=0, columnspan=2, sticky="ew", pady=(6, 0))
+        self.socializacao_summary_labels: dict[str, ttk.Label] = {}
+        for row_index, (key, label_text) in enumerate(
+            [
+                ("status", "Status"),
+                ("envio", "Envio"),
+                ("movimentacoes", "Movimentações"),
+                ("anexos", "Anexos"),
+            ]
+        ):
+            ttk.Label(resumo_frame, text=label_text).grid(row=row_index, column=0, sticky="w", pady=2)
+            label = ttk.Label(resumo_frame, text="-")
+            label.grid(row=row_index, column=1, sticky="w", padx=(10, 0), pady=2)
+            self.socializacao_summary_labels[key] = label
+        form.columnconfigure(1, weight=1)
+        form.rowconfigure(8, weight=1)
+
     def _load_initial_state(self) -> None:
         self.apply_defaults_to_form()
         self.refresh_month_selector()
         self.refresh_turma_tree()
         self.refresh_encontro_tree()
         self.refresh_checklist()
+        self._refresh_cursista_combo_options()
+        self.refresh_cursista_tree()
+        self.refresh_acompanhamento_tree()
+        self.refresh_socializacao_tree()
 
         if self.month_label_to_id:
             first_label = next(iter(self.month_label_to_id))
@@ -1118,6 +2122,7 @@ class MultiplicaApp(tk.Tk):
             self.status_bar_var.set(
                 "Nenhum mês com encontros ainda. O primeiro mês será criado ao salvar um encontro."
             )
+        self._refresh_cursistas_dashboard()
 
     def refresh_month_selector(self, select_month_id: int | None = None) -> None:
         rows = self.database.list_months()
@@ -1160,6 +2165,1258 @@ class MultiplicaApp(tk.Tk):
         self.refresh_turma_tree()
         self.refresh_encontro_tree()
         self.refresh_checklist()
+        self._refresh_cursistas_dashboard()
+        self.refresh_acompanhamento_tree()
+        self.refresh_socializacao_tree()
+
+    def _format_cursista_label(self, row: sqlite3.Row | dict[str, object]) -> str:
+        turma_codigo = ""
+        if isinstance(row, sqlite3.Row):
+            turma_codigo = str(row["turma_codigo"] or "").strip()
+            nome = str(row["nome"] or "").strip()
+            identifier = int(row["id"])
+        else:
+            turma_codigo = str(row.get("turma_codigo", "") or "").strip()
+            nome = str(row.get("nome", "") or "").strip()
+            identifier = int(row["id"])
+        suffix = turma_codigo or "sem turma"
+        return f"{nome} | {suffix} | #{identifier}"
+
+    def _display_label(self, value: str) -> str:
+        return self.DISPLAY_LABELS.get(value, value.replace("_", " ").strip().title())
+
+    def _display_options(self, values: list[str]) -> list[str]:
+        return [self._display_label(value) for value in values]
+
+    def _internal_value_from_label(self, label: str) -> str:
+        normalized = label.strip()
+        for key, value in self.DISPLAY_LABELS.items():
+            if value == normalized:
+                return key
+        return normalized
+
+    def _normalize_import_header(self, value: object) -> str:
+        text = str(value or "").strip().lower()
+        text = unicodedata.normalize("NFKD", text)
+        text = "".join(char for char in text if not unicodedata.combining(char))
+        return " ".join(text.replace("_", " ").replace("-", " ").split())
+
+    def _display_import_preview_status(self, value: str) -> str:
+        mapping = {
+            "novo": "Novo",
+            "atualizar": "Atualizar",
+            "conflito": "Conflito",
+            "ignorado": "Ignorado",
+        }
+        return mapping.get(value, value.replace("_", " ").strip().title())
+
+    def _display_import_preview_reason(self, value: str) -> str:
+        normalized = str(value or "").strip()
+        mapping = {
+            "": "",
+            "linha_vazia": "Linha vazia",
+            "nome_nao_identificado": "Nome não identificado",
+            "turma_nao_identificada": "Turma não identificada",
+            "turma_nao_cadastrada": "Turma não cadastrada",
+            "mais_de_um_cursista_mesmo_nome_turma": "Mais de um cursista com mesmo nome e turma",
+            "email_ja_cadastrado": "E-mail já cadastrado em outro cursista",
+            "cursista_nao_encontrado_na_aplicacao": "Cursista não encontrado na aplicação",
+        }
+        if normalized in mapping:
+            return mapping[normalized]
+        if normalized.startswith("duplicada_na_planilha_linha_"):
+            line_number = normalized.rsplit("_", 1)[-1]
+            return f"Duplicada na planilha (linha {line_number})"
+        return normalized.replace("_", " ").strip().capitalize()
+
+    def _format_encontro_label(self, row: sqlite3.Row | dict[str, object]) -> str:
+        data = self._format_date_for_display(str(row["data_encontro"]), full_year=True)
+        return f"{data} | Pauta {row['pauta_numero']} | {row['turma_codigo']}"
+
+    def _mask_email(self, value: str) -> str:
+        text = value.strip()
+        if not text or "@" not in text:
+            return text
+        local, domain = text.split("@", 1)
+        if len(local) <= 2:
+            masked_local = local[:1] + "*"
+        else:
+            masked_local = local[:2] + "*" * max(len(local) - 2, 1)
+        return f"{masked_local}@{domain}"
+
+    def _mask_phone(self, value: str) -> str:
+        digits = "".join(char for char in value if char.isdigit())
+        if len(digits) < 4:
+            return value.strip()
+        return f"***{digits[-4:]}"
+
+    def _parse_optional_date(self, raw_value: str) -> str:
+        return self._parse_date(raw_value) if raw_value.strip() else ""
+
+    def _get_turma_values_for_combos(self) -> list[str]:
+        active_labels = list(self.encontro_turma_combo["values"]) if hasattr(self, "encontro_turma_combo") else []
+        available = active_labels or list(self.turma_label_to_id.keys())
+        return [""] + list(available)
+
+    def _refresh_cursista_combo_options(self) -> None:
+        self.cursista_label_to_id = {}
+        all_rows = self.database.list_cursistas(include_inactive=False)
+        for row in all_rows:
+            label = self._format_cursista_label(row)
+            self.cursista_label_to_id[label] = int(row["id"])
+
+        combo_configs: list[tuple[ttk.Combobox, str]] = []
+        if hasattr(self, "acompanhamento_cursista_combo"):
+            turma_label = (
+                self.acompanhamento_turma_var.get().strip()
+                or self.acompanhamento_filter_turma_var.get().strip()
+            )
+            combo_configs.append((self.acompanhamento_cursista_combo, turma_label))
+        if hasattr(self, "socializacao_cursista_combo"):
+            turma_label = (
+                self.socializacao_turma_var.get().strip()
+                or self.socializacao_filter_turma_var.get().strip()
+            )
+            combo_configs.append((self.socializacao_cursista_combo, turma_label))
+
+        for combo, turma_label in combo_configs:
+            turma_id = self.turma_label_to_id.get(turma_label) if turma_label else None
+            rows = self.database.list_cursistas(include_inactive=False, turma_id=turma_id)
+            labels = [self._format_cursista_label(row) for row in rows]
+            combo["values"] = labels
+            current_value = combo.get().strip()
+            if current_value and current_value not in labels:
+                combo.set("")
+
+    def _refresh_cursista_module_turma_options(self) -> None:
+        values = self._get_turma_values_for_combos()
+        combo_names = [
+            "cursista_turma_combo",
+            "cursista_filter_turma_combo",
+            "acompanhamento_turma_combo",
+            "acompanhamento_filter_turma_combo",
+            "socializacao_turma_combo",
+            "socializacao_filter_turma_combo",
+        ]
+        for name in combo_names:
+            combo = getattr(self, name, None)
+            if combo is not None:
+                combo["values"] = values
+                current_value = combo.get().strip()
+                if current_value and current_value not in values:
+                    combo.set("")
+
+    def _populate_acompanhamento_encontros_for_turma(
+        self,
+        turma_id: int | None = None,
+        month_id: int | None = None,
+    ) -> None:
+        self.acompanhamento_encontro_label_to_id = {}
+        values = [""]
+        if turma_id:
+            rows = self.database.list_encontros_for_turma(turma_id, month_id or self.current_month_id)
+            for row in rows:
+                label = self._format_encontro_label(row)
+                values.append(label)
+                self.acompanhamento_encontro_label_to_id[label] = int(row["id"])
+        self.acompanhamento_encontro_combo["values"] = values
+        if self.acompanhamento_encontro_var.get().strip() not in values:
+            self.acompanhamento_encontro_var.set("")
+
+    def _refresh_cursistas_dashboard(self) -> None:
+        try:
+            month = int(self.socializacao_mes_var.get() or datetime.today().month)
+            year = int(self.socializacao_ano_var.get() or datetime.today().year)
+        except ValueError:
+            month = datetime.today().month
+            year = datetime.today().year
+        counts = self.database.get_cursistas_dashboard_counts(month, year)
+        for key, label in self.cursistas_dashboard_labels.items():
+            label.configure(text=str(counts.get(key, 0)))
+
+    def _build_acompanhamento_attachment_directory(self, acompanhamento_id: int) -> Path:
+        target = ACOMPANHAMENTOS_DIR / f"acomp_{acompanhamento_id:05d}"
+        target.mkdir(parents=True, exist_ok=True)
+        return target
+
+    def _build_socializacao_attachment_directory(self, socializacao_id: int) -> Path:
+        target = SOCIALIZACOES_DIR / f"socializacao_{socializacao_id:05d}"
+        target.mkdir(parents=True, exist_ok=True)
+        return target
+
+    def _next_attachment_path(self, folder: Path, source_name: str) -> Path:
+        source_path = Path(source_name)
+        stem = slugify(source_path.stem or "arquivo")
+        extension = source_path.suffix or ".bin"
+        counter = 1
+        while True:
+            candidate = folder / f"{stem}_{counter:02d}{extension}"
+            if not candidate.exists():
+                return candidate
+            counter += 1
+
+    def _delete_file_if_exists(self, file_path: str | Path) -> None:
+        path = Path(file_path)
+        if path.exists():
+            path.unlink()
+
+    def refresh_acompanhamento_movimentacoes_list(self) -> None:
+        self.acompanhamento_movimentacoes_rows = []
+        self.acompanhamento_movimentacoes_listbox.delete(0, "end")
+        if not self.selected_acompanhamento_id:
+            self._update_acompanhamento_summary()
+            return
+        rows = self.database.list_acompanhamento_movimentacoes(self.selected_acompanhamento_id)
+        self.acompanhamento_movimentacoes_rows = rows
+        for row in rows:
+            data_label = self._format_date_for_display(str(row["data_movimentacao"]), full_year=True)
+            resumo = str(row["descricao"] or "").strip().replace("\n", " ")
+            label = f"{data_label} - {resumo[:80]}"
+            self.acompanhamento_movimentacoes_listbox.insert("end", label)
+        self._update_acompanhamento_summary()
+
+    def refresh_acompanhamento_attachments_list(self) -> None:
+        self.acompanhamento_attachment_rows = {}
+        self.acompanhamento_anexos_listbox.delete(0, "end")
+        if not self.selected_acompanhamento_id:
+            self._update_acompanhamento_summary()
+            return
+        rows = self.database.list_acompanhamento_anexos(self.selected_acompanhamento_id)
+        for row in rows:
+            anexo_id = int(row["id"])
+            self.acompanhamento_attachment_rows[anexo_id] = row
+            self.acompanhamento_anexos_listbox.insert("end", f"{anexo_id} - {Path(row['arquivo_copiado']).name}")
+        self._update_acompanhamento_summary()
+
+    def refresh_socializacao_movimentacoes_list(self) -> None:
+        self.socializacao_movimentacoes_rows = []
+        self.socializacao_movimentacoes_listbox.delete(0, "end")
+        if not self.selected_socializacao_id:
+            self._update_socializacao_summary()
+            return
+        rows = self.database.list_socializacao_movimentacoes(self.selected_socializacao_id)
+        self.socializacao_movimentacoes_rows = rows
+        for row in rows:
+            data_label = self._format_date_for_display(str(row["data_movimentacao"]), full_year=True)
+            resumo = str(row["descricao"] or "").strip().replace("\n", " ")
+            label = f"{data_label} - {resumo[:80]}"
+            self.socializacao_movimentacoes_listbox.insert("end", label)
+        self._update_socializacao_summary()
+
+    def refresh_socializacao_attachments_list(self) -> None:
+        self.socializacao_attachment_rows = {}
+        self.socializacao_anexos_listbox.delete(0, "end")
+        if not self.selected_socializacao_id:
+            self._update_socializacao_summary()
+            return
+        rows = self.database.list_socializacao_anexos(self.selected_socializacao_id)
+        for row in rows:
+            anexo_id = int(row["id"])
+            self.socializacao_attachment_rows[anexo_id] = row
+            self.socializacao_anexos_listbox.insert("end", f"{anexo_id} - {Path(row['arquivo_copiado']).name}")
+        self._update_socializacao_summary()
+
+    def _update_acompanhamento_summary(self, row: sqlite3.Row | None = None) -> None:
+        if not hasattr(self, "acompanhamento_summary_labels"):
+            return
+        if row is None and self.selected_acompanhamento_id:
+            row = self.database.get_acompanhamento(self.selected_acompanhamento_id)
+        if not row:
+            for label in self.acompanhamento_summary_labels.values():
+                label.configure(text="-")
+            return
+        abertura = self._format_date_for_display(str(row["data_abertura"]), full_year=True)
+        resolucao = (
+            self._format_date_for_display(str(row["data_resolucao"]), full_year=True)
+            if row["data_resolucao"]
+            else "-"
+        )
+        self.acompanhamento_summary_labels["status"].configure(
+            text=f"{self._display_label(str(row['status']))} | {self._display_label(str(row['prioridade']))}"
+        )
+        self.acompanhamento_summary_labels["periodo"].configure(
+            text=f"{abertura} -> {resolucao}"
+        )
+        self.acompanhamento_summary_labels["movimentacoes"].configure(
+            text=str(len(self.acompanhamento_movimentacoes_rows))
+        )
+        self.acompanhamento_summary_labels["anexos"].configure(
+            text=str(len(self.acompanhamento_attachment_rows))
+        )
+
+    def _update_socializacao_summary(self, row: dict[str, object] | sqlite3.Row | None = None) -> None:
+        if not hasattr(self, "socializacao_summary_labels"):
+            return
+        if row is None and self.selected_socializacao_id:
+            row = self.database.get_socializacao(self.selected_socializacao_id)
+        if not row:
+            for label in self.socializacao_summary_labels.values():
+                label.configure(text="-")
+            return
+        if isinstance(row, sqlite3.Row):
+            status = str(row["status_envio"] or "")
+            data_envio = str(row["data_envio"] or "")
+            apoio = bool(row["necessita_apoio"])
+            destaque = bool(row["destaque_potencial"])
+        else:
+            status = str(row.get("status_envio", "") or "")
+            data_envio = str(row.get("data_envio", "") or "")
+            apoio = bool(row.get("necessita_apoio"))
+            destaque = bool(row.get("destaque_potencial"))
+        envio = self._format_date_for_display(data_envio, full_year=True) if data_envio else "-"
+        self.socializacao_summary_labels["status"].configure(
+            text=(
+                f"{self._display_label(status)} | "
+                f"apoio={'sim' if apoio else 'não'} | "
+                f"destaque={'sim' if destaque else 'não'}"
+            )
+        )
+        self.socializacao_summary_labels["envio"].configure(text=envio)
+        self.socializacao_summary_labels["movimentacoes"].configure(
+            text=str(len(self.socializacao_movimentacoes_rows))
+        )
+        self.socializacao_summary_labels["anexos"].configure(
+            text=str(len(self.socializacao_attachment_rows))
+        )
+
+    def _get_selected_acompanhamento_movimentacao_row(self) -> sqlite3.Row | None:
+        selection = self.acompanhamento_movimentacoes_listbox.curselection()
+        if not selection:
+            return None
+        index = selection[0]
+        if index >= len(self.acompanhamento_movimentacoes_rows):
+            return None
+        return self.acompanhamento_movimentacoes_rows[index]
+
+    def _get_selected_socializacao_movimentacao_row(self) -> sqlite3.Row | None:
+        selection = self.socializacao_movimentacoes_listbox.curselection()
+        if not selection:
+            return None
+        index = selection[0]
+        if index >= len(self.socializacao_movimentacoes_rows):
+            return None
+        return self.socializacao_movimentacoes_rows[index]
+
+    def _get_selected_attachment_row(
+        self,
+        listbox: tk.Listbox,
+        row_map: dict[int, sqlite3.Row],
+    ) -> sqlite3.Row | None:
+        selection = listbox.curselection()
+        if not selection:
+            return None
+        item_text = listbox.get(selection[0])
+        try:
+            row_id = int(item_text.split(" - ", 1)[0])
+        except ValueError:
+            return None
+        return row_map.get(row_id)
+
+    def _ensure_acompanhamento_saved(self) -> int | None:
+        if self.selected_acompanhamento_id:
+            return self.selected_acompanhamento_id
+        return self.save_acompanhamento(show_message=False)
+
+    def _ensure_socializacao_saved(self) -> int | None:
+        if self.selected_socializacao_id:
+            return self.selected_socializacao_id
+        return self.save_socializacao(show_message=False)
+
+    def clear_cursista_form(self) -> None:
+        self.selected_cursista_id = None
+        self.cursista_nome_var.set("")
+        self.cursista_turma_var.set("")
+        self.cursista_email_institucional_var.set("")
+        self.cursista_email_pessoal_var.set("")
+        self.cursista_telefone_var.set("")
+        self.cursista_status_busca_ativa_var.set(self._display_label(BUSCA_ATIVA_STATUS_OPTIONS[0]))
+        self.cursista_ativo_var.set(True)
+        self.cursista_observacao_text.delete("1.0", "end")
+
+    def save_cursista(self) -> None:
+        nome = self.cursista_nome_var.get().strip()
+        if not nome:
+            messagebox.showwarning("Cursista incompleto", "Informe o nome do cursista.")
+            return
+
+        turma_label = self.cursista_turma_var.get().strip()
+        payload = {
+            "nome": nome,
+            "turma_id": self.turma_label_to_id.get(turma_label) if turma_label else None,
+            "email_institucional": self.cursista_email_institucional_var.get().strip(),
+            "email_pessoal": self.cursista_email_pessoal_var.get().strip(),
+            "telefone_whatsapp": self.cursista_telefone_var.get().strip(),
+            "status_busca_ativa": self._internal_value_from_label(
+                self.cursista_status_busca_ativa_var.get().strip()
+            )
+            or BUSCA_ATIVA_STATUS_OPTIONS[0],
+            "observacao_geral": self.cursista_observacao_text.get("1.0", "end").strip(),
+            "ativo": self.cursista_ativo_var.get(),
+        }
+        self.selected_cursista_id = self.database.save_cursista(payload, self.selected_cursista_id)
+        self._refresh_cursista_combo_options()
+        self.refresh_cursista_tree(select_id=self.selected_cursista_id)
+        self.refresh_acompanhamento_tree()
+        self.refresh_socializacao_tree()
+        self._refresh_cursistas_dashboard()
+        self.status_bar_var.set("Cursista salvo no banco local.")
+        messagebox.showinfo("Cursista salvo", "Cadastro de cursista salvo com sucesso.")
+
+    def refresh_cursista_tree(self, select_id: int | None = None) -> None:
+        include_inactive = self.cursista_filter_ativo_var.get() == "todos"
+        turma_label = self.cursista_filter_turma_var.get().strip()
+        turma_id = self.turma_label_to_id.get(turma_label) if turma_label else None
+        rows = self.database.list_cursistas(
+            include_inactive=include_inactive,
+            turma_id=turma_id,
+            search=self.cursista_filter_nome_var.get(),
+            status_busca_ativa=self._internal_value_from_label(
+                self.cursista_filter_busca_var.get().strip()
+            ),
+        )
+        for item in self.cursista_tree.get_children():
+            self.cursista_tree.delete(item)
+
+        for row in rows:
+            self.cursista_tree.insert(
+                "",
+                "end",
+                iid=str(int(row["id"])),
+                values=(
+                    row["nome"],
+                    row["turma_codigo"] or "",
+                    self._display_label(str(row["status_busca_ativa"])),
+                    self._mask_email(str(row["email_institucional"] or "")),
+                    self._mask_phone(str(row["telefone_whatsapp"] or "")),
+                    "sim" if int(row["ativo"] or 0) else "não",
+                ),
+            )
+
+        if select_id is not None and str(select_id) in self.cursista_tree.get_children():
+            self.cursista_tree.selection_set(str(select_id))
+            self.cursista_tree.focus(str(select_id))
+
+    def load_selected_cursista(self) -> None:
+        selection = self.cursista_tree.selection()
+        if not selection:
+            messagebox.showwarning("Selecione um cursista", "Escolha um cursista na lista.")
+            return
+        cursista_id = int(selection[0])
+        row = self.database.get_cursista(cursista_id)
+        if not row:
+            return
+        self.selected_cursista_id = cursista_id
+        self.cursista_nome_var.set(row["nome"])
+        self.cursista_turma_var.set(row["turma_codigo"] or "")
+        self.cursista_email_institucional_var.set(row["email_institucional"])
+        self.cursista_email_pessoal_var.set(row["email_pessoal"])
+        self.cursista_telefone_var.set(row["telefone_whatsapp"])
+        self.cursista_status_busca_ativa_var.set(self._display_label(str(row["status_busca_ativa"])))
+        self.cursista_ativo_var.set(bool(row["ativo"]))
+        self.cursista_observacao_text.delete("1.0", "end")
+        self.cursista_observacao_text.insert("1.0", row["observacao_geral"])
+
+    def deactivate_selected_cursista(self) -> None:
+        selection = self.cursista_tree.selection()
+        if not selection:
+            messagebox.showwarning("Selecione um cursista", "Escolha um cursista para inativar.")
+            return
+        cursista_id = int(selection[0])
+        row = self.database.get_cursista(cursista_id)
+        if not row:
+            return
+        if not messagebox.askyesno(
+            "Inativar cursista",
+            f"Deseja inativar o cursista {row['nome']}?",
+        ):
+            return
+        self.database.deactivate_cursista(cursista_id)
+        self.clear_cursista_form()
+        self._refresh_cursista_combo_options()
+        self.refresh_cursista_tree()
+        self.refresh_acompanhamento_tree()
+        self.refresh_socializacao_tree()
+        self._refresh_cursistas_dashboard()
+        self.status_bar_var.set("Cursista inativado.")
+
+    def _load_cursista_import_rows(self, file_path: Path) -> list[dict[str, object]]:
+        try:
+            from openpyxl import load_workbook
+        except ImportError as error:
+            raise RuntimeError(
+                "A leitura de planilhas Excel requer a dependência openpyxl."
+            ) from error
+
+        workbook = load_workbook(filename=file_path, read_only=True, data_only=True)
+        try:
+            worksheet = workbook.active
+            rows_iter = worksheet.iter_rows(values_only=True)
+            try:
+                headers = next(rows_iter)
+            except StopIteration:
+                return []
+
+            normalized_headers = [self._normalize_import_header(header) for header in headers]
+            header_aliases = {
+                "nome": "nome",
+                "email": "email",
+                "e mail": "email",
+                "telefone": "telefone",
+                "telefone whatsapp": "telefone",
+                "whatsapp": "telefone",
+                "turma": "turma",
+                "busca ativa": "status_busca_ativa",
+                "status busca ativa": "status_busca_ativa",
+                "observacao geral": "observacao_geral",
+                "observacoes": "observacao_geral",
+                "ativo": "ativo",
+            }
+
+            column_map: dict[str, int] = {}
+            for index, header in enumerate(normalized_headers):
+                key = header_aliases.get(header)
+                if key and key not in column_map:
+                    column_map[key] = index
+
+            missing = [field for field in ("nome", "turma") if field not in column_map]
+            if missing:
+                missing_labels = ", ".join(missing)
+                raise ValueError(
+                    f"A planilha precisa conter as colunas obrigatórias: {missing_labels}."
+                )
+
+            imported_rows: list[dict[str, object]] = []
+            for excel_row_number, row in enumerate(rows_iter, start=2):
+                imported_rows.append(
+                    {
+                        "source_row": excel_row_number,
+                        "nome": row[column_map["nome"]] if column_map.get("nome") is not None and column_map["nome"] < len(row) else "",
+                        "email": row[column_map["email"]] if column_map.get("email") is not None and column_map["email"] < len(row) else "",
+                        "telefone": row[column_map["telefone"]] if column_map.get("telefone") is not None and column_map["telefone"] < len(row) else "",
+                        "turma": row[column_map["turma"]] if column_map.get("turma") is not None and column_map["turma"] < len(row) else "",
+                        "status_busca_ativa": row[column_map["status_busca_ativa"]] if column_map.get("status_busca_ativa") is not None and column_map["status_busca_ativa"] < len(row) else "",
+                        "observacao_geral": row[column_map["observacao_geral"]] if column_map.get("observacao_geral") is not None and column_map["observacao_geral"] < len(row) else "",
+                        "ativo": row[column_map["ativo"]] if column_map.get("ativo") is not None and column_map["ativo"] < len(row) else "",
+                    }
+                )
+            return imported_rows
+        finally:
+            workbook.close()
+
+    def _show_cursista_import_preview_dialog(
+        self,
+        file_path: Path,
+        imported_rows: list[dict[str, object]],
+        preview: dict[str, object],
+    ) -> None:
+        dialog = tk.Toplevel(self)
+        dialog.title(f"Prévia da planilha - {file_path.name}")
+        dialog.geometry("1080x620")
+        dialog.minsize(920, 520)
+        dialog.transient(self)
+        dialog.grab_set()
+
+        container = ttk.Frame(dialog, padding=12)
+        container.pack(fill="both", expand=True)
+
+        header = ttk.LabelFrame(container, text="Resumo da análise", padding=10)
+        header.pack(fill="x")
+
+        totals = dict(preview.get("totals", {}))
+        summary_rows = [
+            ("Arquivo", file_path.name),
+            ("Novos", str(totals.get("novo", 0))),
+            ("Atualizações", str(totals.get("atualizar", 0))),
+            ("Conflitos", str(totals.get("conflito", 0))),
+            ("Ignorados", str(totals.get("ignorado", 0))),
+            ("Processáveis", str(preview.get("processavel", 0))),
+        ]
+        for index, (label_text, value_text) in enumerate(summary_rows):
+            ttk.Label(header, text=label_text).grid(row=index // 3, column=(index % 3) * 2, sticky="w", pady=2)
+            ttk.Label(header, text=value_text).grid(
+                row=index // 3,
+                column=(index % 3) * 2 + 1,
+                sticky="w",
+                padx=(10, 24),
+                pady=2,
+            )
+
+        info_var = tk.StringVar(
+            value="Revise os dados antes de importar. Somente linhas processáveis serão gravadas."
+        )
+        ttk.Label(container, textvariable=info_var).pack(anchor="w", pady=(10, 8))
+
+        tree_frame = ttk.LabelFrame(container, text="Linhas da planilha", padding=8)
+        tree_frame.pack(fill="both", expand=True)
+        columns = ("linha", "status", "motivo", "nome", "turma", "email", "telefone")
+        tree = ttk.Treeview(tree_frame, columns=columns, show="headings", height=18)
+        headers = {
+            "linha": "Linha",
+            "status": "Status",
+            "motivo": "Motivo",
+            "nome": "Nome",
+            "turma": "Turma",
+            "email": "E-mail",
+            "telefone": "Telefone",
+        }
+        min_widths = {
+            "linha": 60,
+            "status": 95,
+            "motivo": 180,
+            "nome": 240,
+            "turma": 70,
+            "email": 180,
+            "telefone": 120,
+        }
+        weights = {
+            "linha": 6,
+            "status": 10,
+            "motivo": 18,
+            "nome": 28,
+            "turma": 8,
+            "email": 18,
+            "telefone": 12,
+        }
+        for column in columns:
+            tree.heading(column, text=headers[column])
+            tree.column(column, width=min_widths[column], anchor="w", stretch=True)
+        tree.pack(side="left", fill="both", expand=True)
+        self._register_treeview_autofit(tree, columns, weights, min_widths)
+
+        scroll_y = ttk.Scrollbar(tree_frame, orient="vertical", command=tree.yview)
+        scroll_y.pack(side="right", fill="y")
+        scroll_x = ttk.Scrollbar(tree_frame, orient="horizontal", command=tree.xview)
+        scroll_x.pack(side="bottom", fill="x")
+        tree.configure(yscrollcommand=scroll_y.set, xscrollcommand=scroll_x.set)
+
+        tree.tag_configure("novo", background="#ecfdf5")
+        tree.tag_configure("atualizar", background="#eff6ff")
+        tree.tag_configure("conflito", background="#fef2f2")
+        tree.tag_configure("ignorado", background="#f9fafb")
+
+        for item in preview.get("rows", []):
+            status = str(item.get("status") or "")
+            tree.insert(
+                "",
+                "end",
+                values=(
+                    item.get("source_row", ""),
+                    self._display_import_preview_status(status),
+                    self._display_import_preview_reason(str(item.get("motivo") or "")),
+                    str(item.get("nome") or ""),
+                    str(item.get("turma_codigo") or ""),
+                    str(item.get("email_pessoal") or ""),
+                    str(item.get("telefone_whatsapp") or ""),
+                ),
+                tags=(status,),
+            )
+
+        def apply_import() -> None:
+            processable = int(preview.get("processavel", 0) or 0)
+            if processable <= 0:
+                messagebox.showwarning(
+                    "Nada para importar",
+                    "Não há linhas processáveis nesta planilha.",
+                    parent=dialog,
+                )
+                return
+
+            totals_local = dict(preview.get("totals", {}))
+            if not messagebox.askyesno(
+                "Confirmar importação",
+                (
+                    f"Arquivo: {file_path.name}\n\n"
+                    f"Novos cursistas: {totals_local.get('novo', 0)}\n"
+                    f"Atualizações: {totals_local.get('atualizar', 0)}\n"
+                    f"Conflitos ignorados: {totals_local.get('conflito', 0)}\n"
+                    f"Ignorados: {totals_local.get('ignorado', 0)}\n\n"
+                    "Deseja importar agora apenas as linhas processáveis?"
+                ),
+                parent=dialog,
+            ):
+                return
+
+            result = self.database.apply_cursista_import(imported_rows)
+            self.clear_cursista_form()
+            self._refresh_cursista_combo_options()
+            self.refresh_cursista_tree()
+            self.refresh_acompanhamento_tree()
+            self.refresh_socializacao_tree()
+            self._refresh_cursistas_dashboard()
+            self.status_bar_var.set(
+                f"Importação concluída: {result.get('inseridos', 0)} inseridos, {result.get('atualizados', 0)} atualizados."
+            )
+            messagebox.showinfo(
+                "Importação concluída",
+                (
+                    f"Arquivo: {file_path.name}\n\n"
+                    f"Inseridos: {result.get('inseridos', 0)}\n"
+                    f"Atualizados: {result.get('atualizados', 0)}\n"
+                    f"Conflitos mantidos fora da importação: {totals_local.get('conflito', 0)}\n"
+                    f"Ignorados: {totals_local.get('ignorado', 0)}"
+                ),
+                parent=dialog,
+            )
+            dialog.destroy()
+
+        footer = ttk.Frame(container)
+        footer.pack(fill="x", pady=(10, 0))
+        import_button = ttk.Button(
+            footer,
+            text="Importar processáveis",
+            command=apply_import,
+        )
+        import_button.pack(side="left")
+        if int(preview.get("processavel", 0) or 0) <= 0:
+            import_button.state(["disabled"])
+        ttk.Button(footer, text="Fechar", command=dialog.destroy).pack(side="right")
+
+        dialog.bind("<Escape>", lambda _event: dialog.destroy())
+        dialog.protocol("WM_DELETE_WINDOW", dialog.destroy)
+
+    def preview_cursista_import_file(self) -> None:
+        file_path = filedialog.askopenfilename(
+            title="Selecione a planilha de cursistas",
+            filetypes=[
+                ("Planilhas Excel", "*.xlsx *.xlsm"),
+                ("Todos os arquivos", "*.*"),
+            ],
+        )
+        if not file_path:
+            return
+
+        selected_file = Path(file_path)
+        try:
+            imported_rows = self._load_cursista_import_rows(selected_file)
+            preview = self.database.preview_cursista_import(imported_rows)
+        except RuntimeError as error:
+            messagebox.showerror("Dependência ausente", str(error))
+            return
+        except ValueError as error:
+            messagebox.showwarning("Planilha inválida", str(error))
+            return
+        except Exception as error:
+            messagebox.showerror("Falha na leitura", f"Não foi possível analisar a planilha.\n\n{error}")
+            return
+
+        self._show_cursista_import_preview_dialog(selected_file, imported_rows, preview)
+        self.status_bar_var.set(
+            f"Prévia da planilha concluída: {selected_file.name} ({preview.get('processavel', 0)} processáveis)."
+        )
+
+    def clear_acompanhamento_form(self) -> None:
+        self.selected_acompanhamento_id = None
+        self.acompanhamento_cursista_var.set("")
+        self.acompanhamento_turma_var.set("")
+        self.acompanhamento_encontro_var.set("")
+        self.acompanhamento_categoria_var.set(ACOMPANHAMENTO_CATEGORIAS[0])
+        self.acompanhamento_status_var.set(ACOMPANHAMENTO_STATUS_OPTIONS[0])
+        self.acompanhamento_prioridade_var.set(PRIORIDADE_OPTIONS[1])
+        self.acompanhamento_resumo_var.set("")
+        self.acompanhamento_data_abertura_var.set(datetime.today().strftime("%d/%m/%Y"))
+        self.acompanhamento_data_resolucao_var.set("")
+        self.acompanhamento_encaminhar_pec_var.set(False)
+        self.acompanhamento_descricao_text.delete("1.0", "end")
+        self.acompanhamento_movimentacao_data_var.set(datetime.today().strftime("%d/%m/%Y"))
+        self.acompanhamento_movimentacao_text.delete("1.0", "end")
+        self._populate_acompanhamento_encontros_for_turma(None)
+        self.refresh_acompanhamento_movimentacoes_list()
+        self.refresh_acompanhamento_attachments_list()
+
+    def _on_acompanhamento_cursista_selected(self, _event=None) -> None:
+        label = self.acompanhamento_cursista_var.get().strip()
+        cursista_id = self.cursista_label_to_id.get(label)
+        if not cursista_id:
+            return
+        row = self.database.get_cursista(cursista_id)
+        if not row:
+            return
+        turma_codigo = str(row["turma_codigo"] or "").strip()
+        self.acompanhamento_turma_var.set(turma_codigo)
+        turma_id = self.turma_label_to_id.get(turma_codigo) if turma_codigo else None
+        self._populate_acompanhamento_encontros_for_turma(turma_id)
+
+    def _on_acompanhamento_turma_selected(self, _event=None) -> None:
+        turma_label = self.acompanhamento_turma_var.get().strip()
+        turma_id = self.turma_label_to_id.get(turma_label) if turma_label else None
+        self._refresh_cursista_combo_options()
+        self._populate_acompanhamento_encontros_for_turma(turma_id)
+
+    def _on_socializacao_turma_selected(self, _event=None) -> None:
+        self._refresh_cursista_combo_options()
+
+    def save_acompanhamento(self, show_message: bool = True) -> int | None:
+        cursista_label = self.acompanhamento_cursista_var.get().strip()
+        cursista_id = self.cursista_label_to_id.get(cursista_label)
+        if not cursista_id:
+            messagebox.showwarning("Ocorrência incompleta", "Selecione o cursista.")
+            return None
+        resumo = self.acompanhamento_resumo_var.get().strip()
+        if not resumo:
+            messagebox.showwarning("Ocorrência incompleta", "Informe um resumo da ocorrência.")
+            return None
+
+        turma_label = self.acompanhamento_turma_var.get().strip()
+        status = self.acompanhamento_status_var.get().strip() or ACOMPANHAMENTO_STATUS_OPTIONS[0]
+        data_resolucao = self.acompanhamento_data_resolucao_var.get().strip()
+        if status == "resolvido" and not data_resolucao:
+            data_resolucao = datetime.today().strftime("%d/%m/%Y")
+            self.acompanhamento_data_resolucao_var.set(data_resolucao)
+
+        try:
+            payload = {
+                "cursista_id": cursista_id,
+                "turma_id": self.turma_label_to_id.get(turma_label) if turma_label else None,
+                "encontro_id": self.acompanhamento_encontro_label_to_id.get(
+                    self.acompanhamento_encontro_var.get().strip()
+                ),
+                "categoria": self.acompanhamento_categoria_var.get().strip(),
+                "status": status,
+                "prioridade": self.acompanhamento_prioridade_var.get().strip(),
+                "resumo": resumo,
+                "descricao": self.acompanhamento_descricao_text.get("1.0", "end").strip(),
+                "encaminhar_pec": self.acompanhamento_encaminhar_pec_var.get(),
+                "data_abertura": self._parse_date(self.acompanhamento_data_abertura_var.get()),
+                "data_resolucao": self._parse_optional_date(data_resolucao),
+            }
+        except ValueError as error:
+            messagebox.showwarning("Data inválida", str(error))
+            return None
+
+        self.selected_acompanhamento_id = self.database.save_acompanhamento(
+            payload,
+            self.selected_acompanhamento_id,
+        )
+        self.refresh_acompanhamento_tree(select_id=self.selected_acompanhamento_id)
+        self.refresh_acompanhamento_movimentacoes_list()
+        self.refresh_acompanhamento_attachments_list()
+        self._refresh_cursistas_dashboard()
+        self.status_bar_var.set("Ocorrência do cursista salva.")
+        if show_message:
+            messagebox.showinfo("Ocorrência salva", "Registro salvo com sucesso.")
+        return self.selected_acompanhamento_id
+
+    def refresh_acompanhamento_tree(self, select_id: int | None = None) -> None:
+        self._refresh_cursista_combo_options()
+        turma_label = self.acompanhamento_filter_turma_var.get().strip()
+        turma_id = self.turma_label_to_id.get(turma_label) if turma_label else None
+        rows = self.database.list_acompanhamentos(
+            status_filter=self._internal_value_from_label(
+                self.acompanhamento_filter_status_var.get().strip()
+            ),
+            turma_id=turma_id,
+            categoria=self._internal_value_from_label(
+                self.acompanhamento_filter_categoria_var.get().strip()
+            ),
+            search=self.acompanhamento_filter_search_var.get().strip(),
+            attachment_filter=self._internal_value_from_label(
+                self.acompanhamento_filter_anexos_var.get().strip()
+            ),
+            movement_filter=self._internal_value_from_label(
+                self.acompanhamento_filter_movimentacoes_var.get().strip()
+            ),
+        )
+        for item in self.acompanhamento_tree.get_children():
+            self.acompanhamento_tree.delete(item)
+
+        for row in rows:
+            tags: tuple[str, ...] = ()
+            if row["prioridade"] == "alta" and row["status"] not in {"resolvido", "arquivado"}:
+                tags = ("high_priority",)
+            elif row["status"] in {"resolvido", "arquivado"}:
+                tags = ("resolved",)
+            else:
+                tags = ("pending",)
+            self.acompanhamento_tree.insert(
+                "",
+                "end",
+                iid=str(int(row["id"])),
+                values=(
+                    self._format_date_for_display(str(row["data_abertura"]), full_year=True),
+                    row["cursista_nome"],
+                    row["turma_codigo"] or "",
+                    self._display_label(str(row["categoria"])),
+                    self._display_label(str(row["status"])),
+                    self._display_label(str(row["prioridade"])),
+                ),
+                tags=tags,
+            )
+
+        if select_id is not None and str(select_id) in self.acompanhamento_tree.get_children():
+            self.acompanhamento_tree.selection_set(str(select_id))
+            self.acompanhamento_tree.focus(str(select_id))
+        elif not self.acompanhamento_tree.get_children():
+            self._update_acompanhamento_summary(None)
+
+    def load_selected_acompanhamento(self) -> None:
+        selection = self.acompanhamento_tree.selection()
+        if not selection:
+            messagebox.showwarning("Selecione uma ocorrência", "Escolha uma ocorrência na lista.")
+            return
+        acompanhamento_id = int(selection[0])
+        row = self.database.get_acompanhamento(acompanhamento_id)
+        if not row:
+            return
+        self.selected_acompanhamento_id = acompanhamento_id
+        cursista_row = self.database.get_cursista(int(row["cursista_id"]))
+        if cursista_row:
+            self.acompanhamento_cursista_var.set(self._format_cursista_label(cursista_row))
+        self.acompanhamento_turma_var.set(row["turma_codigo"] or "")
+        turma_id = int(row["turma_id"]) if row["turma_id"] else None
+        encontro_row = self.database.get_encontro(int(row["encontro_id"])) if row["encontro_id"] else None
+        month_id = int(encontro_row["month_id"]) if encontro_row else self.current_month_id
+        self._populate_acompanhamento_encontros_for_turma(turma_id, month_id)
+        if encontro_row:
+            self.acompanhamento_encontro_var.set(self._format_encontro_label(encontro_row))
+        else:
+            self.acompanhamento_encontro_var.set("")
+        self.acompanhamento_categoria_var.set(row["categoria"])
+        self.acompanhamento_status_var.set(row["status"])
+        self.acompanhamento_prioridade_var.set(row["prioridade"])
+        self.acompanhamento_resumo_var.set(row["resumo"])
+        self.acompanhamento_data_abertura_var.set(
+            self._format_date_for_display(str(row["data_abertura"]), full_year=True)
+        )
+        self.acompanhamento_data_resolucao_var.set(
+            self._format_date_for_display(str(row["data_resolucao"]), full_year=True)
+            if row["data_resolucao"]
+            else ""
+        )
+        self.acompanhamento_encaminhar_pec_var.set(bool(row["encaminhar_pec"]))
+        self.acompanhamento_descricao_text.delete("1.0", "end")
+        self.acompanhamento_descricao_text.insert("1.0", row["descricao"])
+        self.refresh_acompanhamento_movimentacoes_list()
+        self.refresh_acompanhamento_attachments_list()
+        self._update_acompanhamento_summary(row)
+
+    def add_acompanhamento_movimentacao(self) -> None:
+        acompanhamento_id = self._ensure_acompanhamento_saved()
+        if not acompanhamento_id:
+            return
+        descricao = self.acompanhamento_movimentacao_text.get("1.0", "end").strip()
+        if not descricao:
+            messagebox.showwarning("Movimentação vazia", "Informe a movimentação a registrar.")
+            return
+        try:
+            data_movimentacao = self._parse_date(self.acompanhamento_movimentacao_data_var.get())
+        except ValueError as error:
+            messagebox.showwarning("Data inválida", str(error))
+            return
+        self.database.add_acompanhamento_movimentacao(acompanhamento_id, data_movimentacao, descricao)
+        self.acompanhamento_movimentacao_text.delete("1.0", "end")
+        self.acompanhamento_movimentacao_data_var.set(datetime.today().strftime("%d/%m/%Y"))
+        self.refresh_acompanhamento_movimentacoes_list()
+        self.status_bar_var.set("Movimentação adicionada à ocorrência.")
+
+    def remove_selected_acompanhamento_movimentacao(self) -> None:
+        row = self._get_selected_acompanhamento_movimentacao_row()
+        if not row:
+            messagebox.showwarning("Selecione uma movimentação", "Escolha uma movimentação para remover.")
+            return
+        if not messagebox.askyesno("Remover movimentação", "Deseja remover a movimentação selecionada?"):
+            return
+        self.database.delete_acompanhamento_movimentacao(int(row["id"]))
+        self.refresh_acompanhamento_movimentacoes_list()
+        self.status_bar_var.set("Movimentação removida.")
+
+    def add_acompanhamento_attachment(self) -> None:
+        acompanhamento_id = self._ensure_acompanhamento_saved()
+        if not acompanhamento_id:
+            return
+        file_paths = filedialog.askopenfilenames(title="Selecione arquivos da ocorrência")
+        if not file_paths:
+            return
+        folder = self._build_acompanhamento_attachment_directory(acompanhamento_id)
+        saved = 0
+        for source in file_paths:
+            source_path = Path(source)
+            target = self._next_attachment_path(folder, source_path.name)
+            shutil.copy2(source_path, target)
+            self.database.add_acompanhamento_anexo(acompanhamento_id, str(source_path), str(target))
+            saved += 1
+        self.refresh_acompanhamento_attachments_list()
+        self.status_bar_var.set(f"{saved} arquivo(s) anexado(s) à ocorrência.")
+
+    def open_selected_acompanhamento_attachment(self) -> None:
+        row = self._get_selected_attachment_row(
+            self.acompanhamento_anexos_listbox,
+            self.acompanhamento_attachment_rows,
+        )
+        if not row:
+            messagebox.showwarning("Selecione um arquivo", "Escolha um anexo para abrir.")
+            return
+        self._open_path(Path(row["arquivo_copiado"]))
+
+    def remove_selected_acompanhamento_attachment(self) -> None:
+        row = self._get_selected_attachment_row(
+            self.acompanhamento_anexos_listbox,
+            self.acompanhamento_attachment_rows,
+        )
+        if not row:
+            messagebox.showwarning("Selecione um arquivo", "Escolha um anexo para remover.")
+            return
+        if not messagebox.askyesno("Remover arquivo", "Deseja remover o anexo selecionado?"):
+            return
+        removed_path = self.database.delete_acompanhamento_anexo(int(row["id"]))
+        if removed_path:
+            self._delete_file_if_exists(removed_path)
+        self.refresh_acompanhamento_attachments_list()
+        self.status_bar_var.set("Anexo da ocorrência removido.")
+
+    def _get_socializacao_reference(self, show_message: bool = True) -> tuple[int, int] | None:
+        try:
+            month = int(self.socializacao_mes_var.get().strip())
+            year = int(self.socializacao_ano_var.get().strip())
+        except ValueError:
+            if show_message:
+                messagebox.showwarning(
+                    "Período inválido",
+                    "Informe mês e ano válidos para a socialização.",
+                )
+            return None
+        if month < 1 or month > 12:
+            if show_message:
+                messagebox.showwarning("Mês inválido", "Informe um mês entre 1 e 12.")
+            return None
+        return month, year
+
+    def clear_socializacao_form(self) -> None:
+        self.selected_socializacao_id = None
+        self.socializacao_cursista_var.set("")
+        self.socializacao_turma_var.set("")
+        self.socializacao_status_var.set(self._display_label(SOCIALIZACAO_STATUS_OPTIONS[0]))
+        self.socializacao_data_envio_var.set("")
+        self.socializacao_necessita_apoio_var.set(False)
+        self.socializacao_destaque_var.set(False)
+        self.socializacao_observacao_text.delete("1.0", "end")
+        self.socializacao_movimentacao_data_var.set(datetime.today().strftime("%d/%m/%Y"))
+        self.socializacao_movimentacao_text.delete("1.0", "end")
+        self.refresh_socializacao_movimentacoes_list()
+        self.refresh_socializacao_attachments_list()
+
+    def _on_socializacao_cursista_selected(self, _event=None) -> None:
+        label = self.socializacao_cursista_var.get().strip()
+        cursista_id = self.cursista_label_to_id.get(label)
+        if not cursista_id:
+            return
+        row = self.database.get_cursista(cursista_id)
+        if not row:
+            return
+        self.socializacao_turma_var.set(row["turma_codigo"] or "")
+
+    def save_socializacao(self, show_message: bool = True) -> int | None:
+        cursista_label = self.socializacao_cursista_var.get().strip()
+        cursista_id = self.cursista_label_to_id.get(cursista_label)
+        if not cursista_id:
+            messagebox.showwarning("Socialização incompleta", "Selecione o cursista.")
+            return None
+        reference = self._get_socializacao_reference()
+        if not reference:
+            return None
+        month, year = reference
+        turma_label = self.socializacao_turma_var.get().strip()
+
+        try:
+            payload = {
+                "cursista_id": cursista_id,
+                "turma_id": self.turma_label_to_id.get(turma_label) if turma_label else None,
+                "mes_referencia": month,
+                "ano_referencia": year,
+                "status_envio": self._internal_value_from_label(
+                    self.socializacao_status_var.get().strip()
+                )
+                or SOCIALIZACAO_STATUS_OPTIONS[0],
+                "data_envio": self._parse_optional_date(self.socializacao_data_envio_var.get()),
+                "observacao_pedagogica": self.socializacao_observacao_text.get("1.0", "end").strip(),
+                "necessita_apoio": self.socializacao_necessita_apoio_var.get(),
+                "destaque_potencial": self.socializacao_destaque_var.get(),
+            }
+        except ValueError as error:
+            messagebox.showwarning("Data inválida", str(error))
+            return None
+
+        self.selected_socializacao_id = self.database.upsert_socializacao_mensal(payload)
+        self.refresh_socializacao_tree(select_item=f"s{self.selected_socializacao_id}")
+        self.refresh_socializacao_movimentacoes_list()
+        self.refresh_socializacao_attachments_list()
+        self._refresh_cursistas_dashboard()
+        self.status_bar_var.set("Socialização registrada.")
+        if show_message:
+            messagebox.showinfo("Socialização salva", "Registro salvo com sucesso.")
+        return self.selected_socializacao_id
+
+    def refresh_socializacao_tree(
+        self,
+        select_item: str | None = None,
+        show_message: bool = False,
+    ) -> None:
+        self._refresh_cursista_combo_options()
+        reference = self._get_socializacao_reference(show_message=show_message)
+        if not reference:
+            return
+        month, year = reference
+        turma_label = self.socializacao_filter_turma_var.get().strip()
+        turma_id = self.turma_label_to_id.get(turma_label) if turma_label else None
+        rows = self.database.list_socializacoes(
+            month,
+            year,
+            turma_id=turma_id,
+            status_envio=self._internal_value_from_label(
+                self.socializacao_filter_status_var.get().strip()
+            ),
+            search=self.socializacao_filter_search_var.get().strip(),
+            attachment_filter=self._internal_value_from_label(
+                self.socializacao_filter_anexos_var.get().strip()
+            ),
+            movement_filter=self._internal_value_from_label(
+                self.socializacao_filter_movimentacoes_var.get().strip()
+            ),
+        )
+        self.socializacao_rows_by_item_id = {}
+        for item in self.socializacao_tree.get_children():
+            self.socializacao_tree.delete(item)
+
+        for row in rows:
+            item_id = f"s{row['socializacao_id']}" if row["socializacao_id"] else f"c{row['cursista_id']}"
+            self.socializacao_rows_by_item_id[item_id] = dict(row)
+            tags: tuple[str, ...] = ()
+            if int(row["destaque_potencial"] or 0):
+                tags = ("highlight",)
+            elif int(row["necessita_apoio"] or 0):
+                tags = ("support",)
+            elif str(row["status_envio"]) == "nao_enviada":
+                tags = ("pending",)
+            self.socializacao_tree.insert(
+                "",
+                "end",
+                iid=item_id,
+                values=(
+                    row["cursista_nome"],
+                    row["turma_codigo"] or "",
+                    self._display_label(str(row["status_envio"])),
+                    self._format_date_for_display(str(row["data_envio"]), full_year=True)
+                    if row["data_envio"]
+                    else "",
+                    "sim" if int(row["necessita_apoio"] or 0) else "não",
+                    "sim" if int(row["destaque_potencial"] or 0) else "não",
+                ),
+                tags=tags,
+            )
+
+        self._refresh_cursistas_dashboard()
+        if select_item is not None and select_item in self.socializacao_tree.get_children():
+            self.socializacao_tree.selection_set(select_item)
+            self.socializacao_tree.focus(select_item)
+        elif not self.socializacao_tree.get_children():
+            self._update_socializacao_summary(None)
+
+    def load_selected_socializacao(self) -> None:
+        selection = self.socializacao_tree.selection()
+        if not selection:
+            messagebox.showwarning("Selecione uma socialização", "Escolha um registro na lista.")
+            return
+        item_id = selection[0]
+        row = self.socializacao_rows_by_item_id.get(item_id)
+        if not row:
+            return
+        self.selected_socializacao_id = int(row["socializacao_id"]) if row["socializacao_id"] else None
+        cursista_row = self.database.get_cursista(int(row["cursista_id"]))
+        if cursista_row:
+            self.socializacao_cursista_var.set(self._format_cursista_label(cursista_row))
+        self.socializacao_turma_var.set(str(row["turma_codigo"] or ""))
+        self.socializacao_status_var.set(
+            self._display_label(str(row["status_envio"] or SOCIALIZACAO_STATUS_OPTIONS[0]))
+        )
+        self.socializacao_data_envio_var.set(
+            self._format_date_for_display(str(row["data_envio"]), full_year=True)
+            if row["data_envio"]
+            else ""
+        )
+        self.socializacao_necessita_apoio_var.set(bool(row["necessita_apoio"]))
+        self.socializacao_destaque_var.set(bool(row["destaque_potencial"]))
+        self.socializacao_observacao_text.delete("1.0", "end")
+        self.socializacao_observacao_text.insert("1.0", str(row["observacao_pedagogica"] or ""))
+        self.refresh_socializacao_movimentacoes_list()
+        self.refresh_socializacao_attachments_list()
+        self._update_socializacao_summary(row)
+
+    def mark_socializacao_sent_today(self) -> None:
+        self.socializacao_status_var.set(self._display_label("enviada"))
+        self.socializacao_data_envio_var.set(datetime.today().strftime("%d/%m/%Y"))
+
+    def add_socializacao_movimentacao(self) -> None:
+        socializacao_id = self._ensure_socializacao_saved()
+        if not socializacao_id:
+            return
+        descricao = self.socializacao_movimentacao_text.get("1.0", "end").strip()
+        if not descricao:
+            messagebox.showwarning("Movimentação vazia", "Informe a movimentação a registrar.")
+            return
+        try:
+            data_movimentacao = self._parse_date(self.socializacao_movimentacao_data_var.get())
+        except ValueError as error:
+            messagebox.showwarning("Data inválida", str(error))
+            return
+        self.database.add_socializacao_movimentacao(socializacao_id, data_movimentacao, descricao)
+        self.socializacao_movimentacao_text.delete("1.0", "end")
+        self.socializacao_movimentacao_data_var.set(datetime.today().strftime("%d/%m/%Y"))
+        self.refresh_socializacao_movimentacoes_list()
+        self.status_bar_var.set("Movimentação adicionada à socialização.")
+
+    def remove_selected_socializacao_movimentacao(self) -> None:
+        row = self._get_selected_socializacao_movimentacao_row()
+        if not row:
+            messagebox.showwarning("Selecione uma movimentação", "Escolha uma movimentação para remover.")
+            return
+        if not messagebox.askyesno("Remover movimentação", "Deseja remover a movimentação selecionada?"):
+            return
+        self.database.delete_socializacao_movimentacao(int(row["id"]))
+        self.refresh_socializacao_movimentacoes_list()
+        self.status_bar_var.set("Movimentação removida.")
+
+    def add_socializacao_attachment(self) -> None:
+        socializacao_id = self._ensure_socializacao_saved()
+        if not socializacao_id:
+            return
+        file_paths = filedialog.askopenfilenames(title="Selecione arquivos da socialização")
+        if not file_paths:
+            return
+        folder = self._build_socializacao_attachment_directory(socializacao_id)
+        saved = 0
+        for source in file_paths:
+            source_path = Path(source)
+            target = self._next_attachment_path(folder, source_path.name)
+            shutil.copy2(source_path, target)
+            self.database.add_socializacao_anexo(socializacao_id, str(source_path), str(target))
+            saved += 1
+        self.refresh_socializacao_attachments_list()
+        self.status_bar_var.set(f"{saved} arquivo(s) anexado(s) à socialização.")
+
+    def open_selected_socializacao_attachment(self) -> None:
+        row = self._get_selected_attachment_row(
+            self.socializacao_anexos_listbox,
+            self.socializacao_attachment_rows,
+        )
+        if not row:
+            messagebox.showwarning("Selecione um arquivo", "Escolha um anexo para abrir.")
+            return
+        self._open_path(Path(row["arquivo_copiado"]))
+
+    def remove_selected_socializacao_attachment(self) -> None:
+        row = self._get_selected_attachment_row(
+            self.socializacao_anexos_listbox,
+            self.socializacao_attachment_rows,
+        )
+        if not row:
+            messagebox.showwarning("Selecione um arquivo", "Escolha um anexo para remover.")
+            return
+        if not messagebox.askyesno("Remover arquivo", "Deseja remover o anexo selecionado?"):
+            return
+        removed_path = self.database.delete_socializacao_anexo(int(row["id"]))
+        if removed_path:
+            self._delete_file_if_exists(removed_path)
+        self.refresh_socializacao_attachments_list()
+        self.status_bar_var.set("Anexo da socialização removido.")
 
     def collect_professor_data(self) -> dict[str, str]:
         return {
@@ -1177,7 +3434,14 @@ class MultiplicaApp(tk.Tk):
             return
         if not self._normalize_currency_field():
             return
-        self.database.save_month(self.current_month_id, self.collect_professor_data())
+        rate_decision = self._confirm_month_rate_update(self.current_month_id)
+        if rate_decision is None:
+            return
+        self.database.save_month(
+            self.current_month_id,
+            self.collect_professor_data(),
+            update_weekly_rate=rate_decision,
+        )
         self.status_bar_var.set("Dados do mês atualizados.")
         messagebox.showinfo("Dados salvos", "Os dados do professor foram salvos no mês ativo.")
 
@@ -1227,6 +3491,10 @@ class MultiplicaApp(tk.Tk):
 
         self.refresh_turma_tree(select_id=self.selected_turma_id)
         self.refresh_encontro_tree()
+        self._refresh_cursista_combo_options()
+        self.refresh_cursista_tree()
+        self.refresh_acompanhamento_tree()
+        self.refresh_socializacao_tree()
         self.status_bar_var.set("Turma atualizada no banco local.")
         messagebox.showinfo("Turma salva", "Cadastro de turma salvo com sucesso.")
 
@@ -1254,6 +3522,7 @@ class MultiplicaApp(tk.Tk):
                 self.turma_label_to_id[row["codigo"]] = turma_id
 
         self.encontro_turma_combo["values"] = active_labels or list(self.turma_label_to_id.keys())
+        self._refresh_cursista_module_turma_options()
 
         if select_id is not None and str(select_id) in self.turma_tree.get_children():
             self.turma_tree.selection_set(str(select_id))
@@ -1298,6 +3567,10 @@ class MultiplicaApp(tk.Tk):
         }
         self.database.save_turma(payload, turma_id)
         self.refresh_turma_tree(select_id=turma_id)
+        self._refresh_cursista_combo_options()
+        self.refresh_cursista_tree()
+        self.refresh_acompanhamento_tree()
+        self.refresh_socializacao_tree()
         self.status_bar_var.set(f"Situação da turma alterada para {new_status}.")
 
     def clear_encontro_form(self) -> None:
@@ -1346,10 +3619,21 @@ class MultiplicaApp(tk.Tk):
 
     def _get_or_create_month_from_iso_date(self, iso_date: str) -> int:
         encounter_date = datetime.strptime(iso_date, "%Y-%m-%d")
+        existing_month = self.database.get_month_by_reference(encounter_date.month, encounter_date.year)
         month_id = self.database.get_or_create_month(encounter_date.month, encounter_date.year)
         if not self._normalize_currency_field():
             raise ValueError("Informe um valor válido para a formação semanal.")
-        self.database.save_month(month_id, self.collect_professor_data())
+        update_weekly_rate = True
+        if existing_month:
+            rate_decision = self._confirm_month_rate_update(month_id)
+            if rate_decision is None:
+                raise ValueError("Operação cancelada pelo usuário.")
+            update_weekly_rate = rate_decision
+        self.database.save_month(
+            month_id,
+            self.collect_professor_data(),
+            update_weekly_rate=update_weekly_rate,
+        )
         return month_id
 
     def _collect_encontro_payload(self) -> dict[str, object]:

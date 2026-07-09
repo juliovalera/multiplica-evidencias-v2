@@ -13,11 +13,11 @@
   <img alt="SQLite" src="https://img.shields.io/badge/Banco-SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white">
   <img alt="DOCX/PDF" src="https://img.shields.io/badge/Relat%C3%B3rios-DOCX%20%2F%20PDF-8A2BE2?style=for-the-badge">
   <img alt="Licença MIT" src="https://img.shields.io/badge/Licen%C3%A7a-MIT-E0A800?style=for-the-badge">
-  <img alt="Versão 1,027" src="https://img.shields.io/badge/Vers%C3%A3o-1.027-7B1FA2?style=for-the-badge">
+  <img alt="Versão 2,000" src="https://img.shields.io/badge/Vers%C3%A3o-2.000-7B1FA2?style=for-the-badge">
 </p>
 
 <p>
-  <strong>Versão atual:</strong> <code>1,027</code> &nbsp;•&nbsp;
+  <strong>Versão atual:</strong> <code>2,000</code> &nbsp;•&nbsp;
   <strong>Primeira publicação pública:</strong> <code>1.000</code>
 </p>
 
@@ -190,13 +190,20 @@ Inclui:
 O projeto adota um versionamento incremental a partir da publicação pública inicial no GitHub.
 
 - `1.000` → publicação pública inicial
-- `1,027` → versão atual, consolidando **27 implementações e correções** desde a primeira publicação
+- `1,027` → última versão estável da linha pública inicial
+- `2,000` → início da linha 2 em repositório separado, com evolução funcional mais avançada
 
-> Convenção adotada neste projeto: a parte fracionária representa o acumulado de implementações/correções relevantes publicadas após a base `1.000`.
+> Convenção adotada neste projeto: a parte fracionária representa o acumulado de implementações/correções relevantes publicadas após a base principal. A linha `2.x` inaugura um novo repositório de evolução separada.
 
 ---
 
 ## Histórico de versões
+
+### Versão 2.000 — início da linha 2
+
+- Nova linha de versionamento, separada da linha pública estável `1.x`.
+- Repositório próprio para evolução funcional mais avançada.
+- Base inicial da linha 2 a partir do estado atual consolidado do projeto.
 
 ### Versão 1.027 — pacote acumulado de 27 implementações e correções
 
