@@ -2,6 +2,12 @@
 
 <h1>📘 Multiplica Evidências</h1>
 
+<p><strong>Linha 2 — edição avançada</strong></p>
+
+<p><em>Repositório da evolução funcional do projeto, separado da linha estável 1.x.</em></p>
+
+<p><strong>Versão estável 1.x:</strong> <a href="https://github.com/juliovalera/multiplica-evidencias">github.com/juliovalera/multiplica-evidencias</a></p>
+
 <p>
   Aplicação desktop em Python para apoiar o registro local de encontros pedagógicos,
   evidências e documentos mensais, inclusive em contextos como o <strong>Programa Multiplica</strong>.
