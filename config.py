@@ -10,6 +10,7 @@ BASE_DIR = Path(__file__).resolve().parent
 INTERFACE_DIR = BASE_DIR / "interface"
 MODELOS_DIR = BASE_DIR / "modelos"
 DATA_DIR = BASE_DIR / "data"
+DOCS_DIR = BASE_DIR / "docs"
 EVIDENCIAS_DIR = BASE_DIR / "evidencias"
 ACOMPANHAMENTOS_DIR = BASE_DIR / "acompanhamentos"
 SOCIALIZACOES_DIR = BASE_DIR / "socializacoes"
@@ -17,11 +18,16 @@ SAIDAS_DIR = BASE_DIR / "saidas"
 BACKUP_DIR = SAIDAS_DIR / "backups"
 DB_PATH = DATA_DIR / "multiplica.db"
 MODEL_DOCX_PATH = MODELOS_DIR / "evidencias.docx"
+GUIA_RAPIDO_PATH = DOCS_DIR / "guia_rapido.md"
+MANUAL_USUARIO_PATH = DOCS_DIR / "manual_usuario.md"
+MANUAL_EDITORIAL_PATH = DOCS_DIR / "manual_usuario_editorial.md"
+AJUDA_RESUMIDA_PATH = DOCS_DIR / "ajuda_resumida.md"
 
 
 def ensure_project_dirs() -> None:
     for path in (
         DATA_DIR,
+        DOCS_DIR,
         EVIDENCIAS_DIR,
         ACOMPANHAMENTOS_DIR,
         SOCIALIZACOES_DIR,

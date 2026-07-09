@@ -15,10 +15,14 @@ from tkinter import filedialog, messagebox, ttk
 
 from config import (
     ACOMPANHAMENTOS_DIR,
+    AJUDA_RESUMIDA_PATH,
     APP_NAME,
     APP_VERSION,
     BACKUP_DIR,
     EVIDENCIAS_DIR,
+    GUIA_RAPIDO_PATH,
+    MANUAL_EDITORIAL_PATH,
+    MANUAL_USUARIO_PATH,
     SAIDAS_DIR,
     SOCIALIZACOES_DIR,
     slugify,
@@ -793,11 +797,14 @@ class MultiplicaApp(tk.Tk):
         ttk.Button(frame, text="Backup do banco", command=self.backup_database).grid(
             row=1, column=3, padx=6
         )
-        ttk.Button(frame, text="Sobre o projeto", command=self.show_about_dialog).grid(
+        ttk.Button(frame, text="Ajuda", command=self.show_help_dialog).grid(
             row=1, column=4, padx=6
         )
+        ttk.Button(frame, text="Sobre o projeto", command=self.show_about_dialog).grid(
+            row=1, column=5, padx=6
+        )
 
-        frame.columnconfigure(5, weight=1)
+        frame.columnconfigure(6, weight=1)
 
     def _build_home_tab(self) -> None:
         title = ttk.Label(
@@ -885,6 +892,30 @@ class MultiplicaApp(tk.Tk):
                     else lambda index=tab_index: self.notebook.select(index)
                 ),
             ).grid(row=0, column=column, padx=(0, 8), pady=2, sticky="w")
+
+        help_frame = ttk.LabelFrame(self.home_tab, text="Ajuda e documentaÃ§Ã£o", padding=10)
+        help_frame.pack(fill="x", pady=(10, 0))
+        ttk.Label(
+            help_frame,
+            text=(
+                "Se preferir, consulte o guia rÃ¡pido, o manual completo ou a versÃ£o editorial "
+                "do manual diretamente por esta tela."
+            ),
+            justify="left",
+        ).pack(anchor="w", pady=(0, 8))
+
+        help_buttons = ttk.Frame(help_frame)
+        help_buttons.pack(fill="x")
+        ttk.Button(help_buttons, text="Abrir ajuda", command=self.show_help_dialog).pack(side="left")
+        ttk.Button(help_buttons, text="Guia rÃ¡pido", command=self.open_quick_guide).pack(
+            side="left", padx=(8, 0)
+        )
+        ttk.Button(help_buttons, text="Manual completo", command=self.open_user_manual).pack(
+            side="left", padx=(8, 0)
+        )
+        ttk.Button(help_buttons, text="Pasta docs", command=self.open_docs_folder).pack(
+            side="left", padx=(8, 0)
+        )
 
     def _build_professor_tab(self) -> None:
         frame = ttk.LabelFrame(self.professor_tab, text="Dados do professor multiplicador", padding=10)
@@ -4314,6 +4345,11 @@ class MultiplicaApp(tk.Tk):
         ).pack(side="left")
         ttk.Button(
             button_row,
+            text="Ajuda",
+            command=self.show_help_dialog,
+        ).pack(side="left", padx=(10, 0))
+        ttk.Button(
+            button_row,
             text="Ler termos novamente",
             command=self.open_terms_review_dialog,
         ).pack(side="left", padx=(10, 0))
@@ -4331,6 +4367,101 @@ class MultiplicaApp(tk.Tk):
             "Contatos copiados",
             "Os e-mails de contato foram copiados para a área de transferência.",
         )
+
+    def show_help_dialog(self) -> None:
+        dialog = tk.Toplevel(self)
+        dialog.title("Ajuda")
+        dialog.geometry("820x620")
+        dialog.minsize(700, 520)
+        dialog.transient(self)
+
+        container = ttk.Frame(dialog, padding=16)
+        container.pack(fill="both", expand=True)
+
+        ttk.Label(
+            container,
+            text="Ajuda e manual do usuÃ¡rio",
+            font=("Segoe UI", 15, "bold"),
+        ).pack(anchor="w")
+        ttk.Label(
+            container,
+            text="Consulte o guia rÃ¡pido, o manual completo e a versÃ£o editorial do manual.",
+            font=("Segoe UI", 10),
+        ).pack(anchor="w", pady=(4, 12))
+
+        actions = ttk.Frame(container)
+        actions.pack(fill="x", pady=(0, 12))
+        ttk.Button(actions, text="Abrir guia rÃ¡pido", command=self.open_quick_guide).pack(side="left")
+        ttk.Button(actions, text="Abrir manual completo", command=self.open_user_manual).pack(
+            side="left", padx=(8, 0)
+        )
+        ttk.Button(actions, text="Abrir manual editorial", command=self.open_editorial_manual).pack(
+            side="left", padx=(8, 0)
+        )
+        ttk.Button(actions, text="Abrir pasta docs", command=self.open_docs_folder).pack(
+            side="left", padx=(8, 0)
+        )
+
+        text_frame = ttk.Frame(container)
+        text_frame.pack(fill="both", expand=True)
+
+        scrollbar = ttk.Scrollbar(text_frame, orient="vertical")
+        scrollbar.pack(side="right", fill="y")
+
+        text_widget = tk.Text(
+            text_frame,
+            wrap="word",
+            font=("Segoe UI", 10),
+            padx=12,
+            pady=12,
+            yscrollcommand=scrollbar.set,
+            relief="solid",
+            borderwidth=1,
+            background="#fcfcfd",
+        )
+        text_widget.pack(fill="both", expand=True)
+        scrollbar.config(command=text_widget.yview)
+        text_widget.insert("1.0", self._load_help_text())
+        text_widget.config(state="disabled")
+
+        footer = ttk.Frame(container)
+        footer.pack(fill="x", pady=(12, 0))
+        ttk.Button(footer, text="Fechar", command=dialog.destroy).pack(side="right")
+
+        dialog.bind("<Escape>", lambda _event: dialog.destroy())
+        dialog.focus_set()
+
+    def open_quick_guide(self) -> None:
+        self._open_document(GUIA_RAPIDO_PATH, "Guia rÃ¡pido")
+
+    def open_user_manual(self) -> None:
+        self._open_document(MANUAL_USUARIO_PATH, "Manual do usuÃ¡rio")
+
+    def open_editorial_manual(self) -> None:
+        self._open_document(MANUAL_EDITORIAL_PATH, "Manual editorial")
+
+    def open_docs_folder(self) -> None:
+        self._open_path(GUIA_RAPIDO_PATH.parent)
+
+    def _load_help_text(self) -> str:
+        if AJUDA_RESUMIDA_PATH.exists():
+            try:
+                return AJUDA_RESUMIDA_PATH.read_text(encoding="utf-8")
+            except OSError:
+                pass
+        return (
+            "Ajuda indisponÃ­vel no momento.\n\n"
+            "Abra a pasta docs para consultar os arquivos de apoio."
+        )
+
+    def _open_document(self, path: Path, document_name: str) -> None:
+        if not path.exists():
+            messagebox.showwarning(
+                "Arquivo nÃ£o encontrado",
+                f"O arquivo de {document_name.lower()} nÃ£o foi localizado em:\n{path}",
+            )
+            return
+        self._open_path(path)
 
     def ensure_terms_acceptance(self) -> None:
         accepted_version = self.database.get_app_config_value(self.TERMS_CONFIG_KEY)
