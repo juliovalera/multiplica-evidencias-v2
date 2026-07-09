@@ -1531,24 +1531,26 @@ class MultiplicaApp(tk.Tk):
             "ativo": "Ativo",
         }
         min_widths = {
-            "nome": 180,
-            "turma": 90,
-            "busca": 130,
-            "email": 180,
-            "telefone": 110,
-            "ativo": 60,
+            "nome": 150,
+            "turma": 70,
+            "busca": 115,
+            "email": 130,
+            "telefone": 85,
+            "ativo": 55,
         }
         weights = {
-            "nome": 28,
-            "turma": 12,
+            "nome": 30,
+            "turma": 10,
             "busca": 18,
-            "email": 24,
+            "email": 22,
             "telefone": 12,
-            "ativo": 6,
+            "ativo": 8,
         }
         for column in columns:
             self.cursista_tree.heading(column, text=headers[column])
             self.cursista_tree.column(column, width=min_widths[column], anchor="w", stretch=True)
+        self.cursista_tree.tag_configure("ativo_sim", foreground="#0f6b2f")
+        self.cursista_tree.tag_configure("ativo_nao", foreground="#9f1239")
         self.cursista_tree.pack(side="left", fill="both", expand=True)
         self.cursista_tree.bind("<Double-1>", lambda _event: self.load_selected_cursista())
         self._register_treeview_autofit(self.cursista_tree, columns, weights, min_widths)
@@ -2633,6 +2635,7 @@ class MultiplicaApp(tk.Tk):
             self.cursista_tree.delete(item)
 
         for row in rows:
+            ativo = bool(int(row["ativo"] or 0))
             self.cursista_tree.insert(
                 "",
                 "end",
@@ -2643,9 +2646,12 @@ class MultiplicaApp(tk.Tk):
                     self._display_label(str(row["status_busca_ativa"])),
                     self._mask_email(str(row["email_institucional"] or "")),
                     self._mask_phone(str(row["telefone_whatsapp"] or "")),
-                    "sim" if int(row["ativo"] or 0) else "não",
+                    "sim" if ativo else "não",
                 ),
+                tags=("ativo_sim" if ativo else "ativo_nao",),
             )
+
+        self.after_idle(lambda: self._autofit_treeview_columns(self.cursista_tree))
 
         if select_id is not None and str(select_id) in self.cursista_tree.get_children():
             self.cursista_tree.selection_set(str(select_id))
