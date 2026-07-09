@@ -54,6 +54,14 @@ O projeto foi criado para reduzir retrabalho no registro mensal de encontros ped
 - Exportação opcional para `PDF`.
 - Extrato financeiro mensal em documento separado.
 - Backup local do banco de dados.
+- Módulo `Acompanhamento de Cursistas` com cadastro, ocorrências e socializações.
+- Controle de busca ativa com contatos, turma, situação e observação geral do cursista.
+- Registro de ocorrências como curso errado, turma errada, acesso, Teams, inscrição, busca ativa e dúvida pedagógica.
+- Registro mensal de socializações com status de envio, apoio pedagógico e potencial destaque.
+- Histórico de movimentações e anexos em ocorrências e socializações.
+- Importação de cursistas por planilha Excel com prévia, validação e conciliação por turma.
+- Aviso de divergência do valor da formação semanal para preservar relatórios antigos.
+- Ajustes de usabilidade para telas menores, com filtros mais claros, rótulos legíveis e painéis com rolagem.
 
 ---
 
@@ -191,7 +199,7 @@ O projeto adota um versionamento incremental a partir da publicação pública i
 
 - `1.000` → publicação pública inicial
 - `1,027` → última versão estável da linha pública inicial
-- `2,000` → início da linha 2 em repositório separado, com evolução funcional mais avançada
+- `2,000` → início da linha 2 em repositório público separado, com evolução funcional mais avançada
 
 > Convenção adotada neste projeto: a parte fracionária representa o acumulado de implementações/correções relevantes publicadas após a base principal. A linha `2.x` inaugura um novo repositório de evolução separada.
 
@@ -201,9 +209,33 @@ O projeto adota um versionamento incremental a partir da publicação pública i
 
 ### Versão 2.000 — início da linha 2
 
-- Nova linha de versionamento, separada da linha pública estável `1.x`.
-- Repositório próprio para evolução funcional mais avançada.
-- Base inicial da linha 2 a partir do estado atual consolidado do projeto.
+1. Nova linha de versionamento, separada da linha pública estável `1.x`.
+2. Repositório público próprio para a evolução funcional mais avançada.
+3. Criação do módulo `Acompanhamento de Cursistas` com abas de `Cursistas`, `Ocorrências` e `Socializações`.
+4. Cadastro de cursistas com turma, e-mail institucional, e-mail pessoal, telefone/WhatsApp, busca ativa, ativo e observação geral.
+5. Dashboard do acompanhamento com totais de cursistas ativos, busca ativa pendente, ocorrências abertas, socializações não enviadas e potenciais destaques.
+6. Registro de ocorrências por cursista com categoria, status, prioridade, resumo, descrição, data de abertura, data de resolução e encaminhamento ao PEC.
+7. Registro mensal de socializações por cursista com status de envio, data, necessidade de apoio e potencial destaque.
+8. Criação de histórico de movimentações para ocorrências e socializações.
+9. Criação de anexos para ocorrências e socializações, com armazenamento local organizado.
+10. Novas pastas locais de trabalho para acompanhamentos e socializações.
+11. Filtros por turma, status, categoria, anexos, movimentações e busca textual nas abas do módulo.
+12. Rótulos mais amigáveis nos combos e nas listagens, substituindo valores internos com underline na interface.
+13. Ajuste de cores e destaques visuais nas linhas de ocorrências e socializações.
+14. Correção da apresentação dos status de busca ativa e de envio de socialização em filtros, combos e listas.
+15. Aviso de divergência do valor da formação semanal ao salvar mês ou encontro em mês já existente.
+16. Preservação do valor financeiro histórico por mês, evitando que reajustes futuros alterem relatórios antigos.
+17. Importação de cursistas por planilha `Excel` com leitura via `openpyxl`.
+18. Limpeza automática do nome importado, ignorando observações após hífen na coluna de nome.
+19. Interpretação do código da turma a partir do texto da planilha PEC, conciliando com `turmas.codigo`.
+20. Prévia da importação com classificação em `novo`, `atualizar`, `conflito` e `ignorado`.
+21. Importação definitiva apenas das linhas processáveis, com confirmação explícita antes da gravação.
+22. Filtro do dropdown de cursistas por turma nas telas de ocorrências e socializações.
+23. Reorganização dos botões e redução de campos altos para melhor uso em resoluções menores.
+24. Resumo do acompanhamento reorganizado em linha horizontal para economizar altura.
+25. Redução da altura da listagem de socializações para liberar espaço ao formulário lateral.
+26. Inclusão de painéis com rolagem própria nas áreas de `Ocorrências` e `Socializações`.
+27. Suporte à roda do mouse e a `Shift + roda do mouse` nas áreas roláveis do módulo.
 
 ### Versão 1.027 — pacote acumulado de 27 implementações e correções
 
