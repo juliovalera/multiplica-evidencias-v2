@@ -838,6 +838,24 @@ class MultiplicaApp(tk.Tk):
             text=f"Versão atual: {APP_VERSION}",
             justify="left",
         ).pack(anchor="w", pady=(0, 8))
+        line_frame = ttk.LabelFrame(self.home_tab, text="Linha do projeto", padding=10)
+        line_frame.pack(fill="x", pady=(0, 10))
+        ttk.Label(
+            line_frame,
+            text="Esta instalaÃ§Ã£o corresponde Ã  Linha 2 (ediÃ§Ã£o avanÃ§ada).",
+            font=("Segoe UI", 10, "bold"),
+            justify="left",
+        ).pack(anchor="w")
+        ttk.Label(
+            line_frame,
+            text=(
+                "Linha estÃ¡vel 1.x: versÃ£o mais simples, indicada para uso mais direto no dia a dia.\n"
+                "Linha avanÃ§ada 2.x: versÃ£o com acompanhamento de cursistas, importaÃ§Ã£o, anexos, "
+                "movimentaÃ§Ãµes e ajuda integrada.\n"
+                "Os materiais de apoio desta instalaÃ§Ã£o foram preparados para a Linha 2."
+            ),
+            justify="left",
+        ).pack(anchor="w", pady=(6, 0))
         tk.Label(
             self.home_tab,
             text=(
