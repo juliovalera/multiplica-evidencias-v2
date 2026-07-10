@@ -12,6 +12,12 @@ data/*
 evidencias/*
 !evidencias/.gitkeep
 
+acompanhamentos/*
+!acompanhamentos/.gitkeep
+
+socializacoes/*
+!socializacoes/.gitkeep
+
 saidas/*
 !saidas/.gitkeep
 
