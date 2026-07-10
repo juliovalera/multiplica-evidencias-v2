@@ -1,7 +1,18 @@
+"""Estruturas e constantes compartilhadas pela aplicação.
+
+Este módulo concentra:
+- opções exibidas em combos e filtros;
+- dataclasses usadas como representação simples de registros.
+
+Isso reduz repetição de valores literais e ajuda a manter coerência entre
+interface, banco e geração de relatórios.
+"""
+
 from dataclasses import dataclass, field
 from typing import List, Optional
 
 
+# Opções relacionadas aos encontros pedagógicos.
 STATUS_OPTIONS = [
     "realizado",
     "sem cursistas",
@@ -44,6 +55,7 @@ ACOMPANHAMENTO_STATUS_OPTIONS = [
 
 PRIORIDADE_OPTIONS = ["baixa", "normal", "alta"]
 
+# Situações possíveis para o acompanhamento das socializações mensais.
 SOCIALIZACAO_STATUS_OPTIONS = [
     "nao_enviada",
     "enviada",
@@ -94,6 +106,8 @@ AUTO_OBSERVATIONS = {
 
 @dataclass
 class ProfessorDefaults:
+    """Dados padrão do professor reaproveitados quando um novo mês é criado."""
+
     nome: str = ""
     tema: str = ""
     email_institucional: str = ""
@@ -103,6 +117,8 @@ class ProfessorDefaults:
 
 @dataclass
 class MonthRecord:
+    """Representa um mês de referência com dados administrativos do período."""
+
     ref_month: int
     ref_year: int
     nome: str = ""
@@ -115,6 +131,8 @@ class MonthRecord:
 
 @dataclass
 class TurmaRecord:
+    """Representa a configuração base de uma turma cadastrada no sistema."""
+
     codigo: str
     dia_semana: str = ""
     horario: str = ""
@@ -125,6 +143,8 @@ class TurmaRecord:
 
 @dataclass
 class EvidenceRecord:
+    """Representa um arquivo de evidência associado a um encontro."""
+
     arquivo_copiado: str
     arquivo_original: str = ""
     id: Optional[int] = None
@@ -132,6 +152,8 @@ class EvidenceRecord:
 
 @dataclass
 class EncontroRecord:
+    """Representa um encontro pedagógico com metadados e evidências anexadas."""
+
     month_id: int
     turma_id: int
     data_encontro: str

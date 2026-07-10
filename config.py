@@ -4,8 +4,8 @@ import unicodedata
 
 
 APP_NAME = "Multiplica Evidências"
-APP_VERSION = "2,013"
-APP_VERSION_TAG = "v2.013"
+APP_VERSION = "2,014"
+APP_VERSION_TAG = "v2.014"
 BASE_DIR = Path(__file__).resolve().parent
 INTERFACE_DIR = BASE_DIR / "interface"
 MODELOS_DIR = BASE_DIR / "modelos"

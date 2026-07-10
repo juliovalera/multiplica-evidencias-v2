@@ -1,3 +1,10 @@
+"""Geração de relatórios DOCX e exportação opcional para PDF.
+
+O módulo foi separado em pequenas funções auxiliares de layout e em funções
+principais de geração. Isso facilita manutenção e também torna a leitura mais
+didática para quem está estudando a construção do documento.
+"""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -35,6 +42,7 @@ PAYABLE_STATUSES = {"realizado", "sem cursistas"}
 
 
 def _ensure_docx_available() -> None:
+    """Falha cedo com mensagem clara se `python-docx` não estiver disponível."""
     if DOCX_IMPORT_ERROR is not None:
         raise RuntimeError(
             "A geração do relatório precisa da biblioteca python-docx.\n\n"
@@ -149,6 +157,11 @@ def _sanitize_filename(month_data: Dict[str, object], prefix: str) -> str:
 
 
 def _create_document(model_path: Optional[Path] = MODEL_DOCX_PATH) -> Any:
+    """Cria um documento novo.
+
+    O parâmetro `model_path` foi preservado para futuras evoluções com modelo
+    DOCX, embora hoje a montagem parta de um documento vazio.
+    """
     _ensure_docx_available()
     return Document()
 
@@ -260,6 +273,7 @@ def generate_docx(
     output_dir: Path = SAIDAS_DIR,
     model_path: Optional[Path] = MODEL_DOCX_PATH,
 ) -> Path:
+    """Gera o relatório principal de evidências do mês."""
     output_dir.mkdir(parents=True, exist_ok=True)
     document = _create_document(model_path)
 
@@ -364,6 +378,7 @@ def generate_financial_statement_docx(
     output_dir: Path = SAIDAS_DIR,
     model_path: Optional[Path] = None,
 ) -> Path:
+    """Gera o extrato financeiro mensal com base nos encontros do período."""
     output_dir.mkdir(parents=True, exist_ok=True)
     document = _create_document(model_path)
 
@@ -399,6 +414,7 @@ def _find_soffice() -> Optional[str]:
 
 
 def export_pdf(docx_path: Path) -> Path:
+    """Converte um DOCX já gerado para PDF usando LibreOffice/soffice."""
     docx_path = Path(docx_path).resolve()
     output_dir = docx_path.parent
     pdf_path = docx_path.with_suffix(".pdf")

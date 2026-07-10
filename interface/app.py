@@ -1,3 +1,15 @@
+"""Interface gráfica principal do Multiplica Evidências.
+
+Como o projeto é desktop e centrado em Tkinter, este módulo concentra:
+- construção da janela e das abas;
+- ligação entre widgets e variáveis de estado;
+- validação de dados de tela;
+- chamadas para banco e relatórios.
+
+Os comentários e docstrings inseridos aqui têm foco pedagógico, sem alterar
+comportamento já consolidado do sistema.
+"""
+
 from __future__ import annotations
 
 import calendar
@@ -43,6 +55,8 @@ from relatorio import export_pdf, generate_docx, generate_financial_statement_do
 
 
 class DatePickerDialog(tk.Toplevel):
+    """Janela auxiliar para selecionar datas com menos erro de digitação."""
+
     WEEKDAY_LABELS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sab", "Dom"]
     MONTH_LABELS = [
         "Janeiro",
@@ -67,6 +81,7 @@ class DatePickerDialog(tk.Toplevel):
         preferred_weekday: int | None = None,
         holiday_resolver=None,
     ) -> None:
+        """Recebe uma data inicial e devolve a escolha via callback."""
         super().__init__(master)
         self.title("Selecionar data")
         self.resizable(False, False)
@@ -233,6 +248,14 @@ class DatePickerDialog(tk.Toplevel):
 
 
 class MultiplicaApp(tk.Tk):
+    """Janela principal da aplicação.
+
+    Esta classe coordena três camadas ao mesmo tempo:
+    - interface e navegação entre abas;
+    - transformação de dados de formulário em payloads de negócio;
+    - delegação de persistência e relatórios para outros módulos.
+    """
+
     TURMA_WEEKDAY_TO_INDEX = {
         "SEG": 0,
         "TER": 1,
@@ -285,6 +308,7 @@ class MultiplicaApp(tk.Tk):
     }
 
     def __init__(self, database: Database) -> None:
+        """Inicializa estado, estilo visual e estrutura base da aplicação."""
         super().__init__()
         self.database = database
         self.title(APP_NAME)
@@ -329,6 +353,12 @@ class MultiplicaApp(tk.Tk):
         self.after(150, self.ensure_terms_acceptance)
 
     def _build_variables(self) -> None:
+        """Cria todas as variáveis Tkinter usadas nos campos da tela.
+
+        Em Tkinter, `StringVar` e `BooleanVar` funcionam como ponte entre os
+        widgets e a lógica da aplicação. Centralizar a criação aqui facilita a
+        manutenção e deixa os formulários mais previsíveis.
+        """
         today = datetime.today()
 
         self.current_month_label_var = tk.StringVar()
@@ -2201,6 +2231,7 @@ class MultiplicaApp(tk.Tk):
         self._refresh_cursistas_dashboard()
 
     def refresh_month_selector(self, select_month_id: int | None = None) -> None:
+        """Atualiza o combo de meses e tenta preservar a seleção desejada."""
         rows = self.database.list_months()
         self.month_label_to_id = {row["ref_label"]: int(row["id"]) for row in rows}
         labels = list(self.month_label_to_id.keys())
@@ -2222,6 +2253,7 @@ class MultiplicaApp(tk.Tk):
             self.load_month(month_id)
 
     def load_month(self, month_id: int) -> None:
+        """Carrega na interface todos os dados ligados ao mês escolhido."""
         row = self.database.get_month(month_id)
         if not row:
             return
@@ -3044,6 +3076,7 @@ class MultiplicaApp(tk.Tk):
         self._refresh_cursista_combo_options()
 
     def save_acompanhamento(self, show_message: bool = True) -> int | None:
+        """Salva uma ocorrência do módulo de acompanhamento de cursistas."""
         cursista_label = self.acompanhamento_cursista_var.get().strip()
         cursista_id = self.cursista_label_to_id.get(cursista_label)
         if not cursista_id:
@@ -3311,6 +3344,7 @@ class MultiplicaApp(tk.Tk):
         self.socializacao_turma_var.set(row["turma_codigo"] or "")
 
     def save_socializacao(self, show_message: bool = True) -> int | None:
+        """Salva a ficha mensal de socialização do cursista selecionado."""
         cursista_label = self.socializacao_cursista_var.get().strip()
         cursista_id = self.cursista_label_to_id.get(cursista_label)
         if not cursista_id:
@@ -3802,6 +3836,7 @@ class MultiplicaApp(tk.Tk):
         }
 
     def save_encontro(self, show_message: bool = True) -> int | None:
+        """Salva um encontro pedagógico após validar o formulário atual."""
         try:
             payload = self._collect_encontro_payload()
         except ValueError as error:

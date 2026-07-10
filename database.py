@@ -1,3 +1,10 @@
+"""Camada de persistência da aplicação baseada em SQLite.
+
+Toda leitura e gravação de dados passa por este módulo. A interface não fala
+diretamente com SQL: ela pede operações para a classe `Database`, que centraliza
+esquema, normalização e consultas.
+"""
+
 from datetime import datetime
 import re
 import shutil
@@ -15,16 +22,21 @@ from models import MONTH_NAMES_PT, ProfessorDefaults
 
 
 class Database:
+    """Encapsula acesso ao banco e regras de persistência do projeto."""
+
     def __init__(self, db_path: Path = DB_PATH) -> None:
+        """Permite trocar o caminho do banco em cenários de teste ou manutenção."""
         self.db_path = Path(db_path)
 
     def connect(self) -> sqlite3.Connection:
+        """Abre conexão configurada para retornar linhas nomeadas (`sqlite3.Row`)."""
         connection = sqlite3.connect(self.db_path)
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys = ON")
         return connection
 
     def initialize(self) -> None:
+        """Cria a estrutura do banco e aplica ajustes de compatibilidade."""
         with self.connect() as connection:
             connection.executescript(
                 """
@@ -353,6 +365,12 @@ class Database:
         return "nao_iniciado"
 
     def reconcile_data_by_encounter_date(self) -> int:
+        """Corrige vínculos de mês usando a data real dos encontros.
+
+        Essa rotina protege o histórico quando a regra de competência evolui.
+        Em vez de confiar apenas no `month_id` antigo, ela compara a data do
+        encontro e move o registro para o mês coerente, se necessário.
+        """
         defaults = self.get_defaults()
         fixes_applied = 0
 
@@ -1121,6 +1139,7 @@ class Database:
         data: Dict[str, object],
         acompanhamento_id: Optional[int] = None,
     ) -> int:
+        """Insere ou atualiza uma ocorrência do módulo de acompanhamento."""
         payload = (
             data["cursista_id"],
             data.get("turma_id"),
@@ -1270,6 +1289,11 @@ class Database:
         attachment_filter: str = "",
         movement_filter: str = "",
     ) -> List[sqlite3.Row]:
+        """Lista a visão mensal de socializações por cursista.
+
+        O `LEFT JOIN` é intencional: ele permite mostrar quem já tem ficha no
+        período e também quem ainda não enviou socialização naquele mês.
+        """
         query = """
             SELECT
                 socializacoes_cursistas.id AS socializacao_id,
@@ -1346,6 +1370,7 @@ class Database:
         data: Dict[str, object],
         socializacao_id: Optional[int] = None,
     ) -> int:
+        """Insere ou atualiza a ficha mensal de socialização de um cursista."""
         payload = (
             data["cursista_id"],
             data.get("turma_id"),
@@ -1613,6 +1638,7 @@ class Database:
             ).fetchone()
 
     def save_encontro(self, data: Dict[str, object], encontro_id: Optional[int] = None) -> int:
+        """Insere ou atualiza um encontro pedagógico."""
         payload = (
             data["month_id"],
             data["turma_id"],
@@ -1702,6 +1728,7 @@ class Database:
             return row["arquivo_copiado"]
 
     def get_month_bundle(self, month_id: int) -> Dict[str, object]:
+        """Agrupa em um único pacote os dados usados pelos relatórios do mês."""
         month = self.get_month(month_id)
         if not month:
             raise ValueError("Mês não encontrado.")
@@ -1733,6 +1760,7 @@ class Database:
         }
 
     def get_checklist(self, month_id: int) -> Dict[str, object]:
+        """Resume pendências do mês para conferência antes da emissão final."""
         encontros = [dict(row) for row in self.list_encontros(month_id)]
 
         issues = []
